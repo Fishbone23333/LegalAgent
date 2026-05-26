@@ -1,0 +1,28 @@
+# Environment and secrets
+.env
+*.env
+!.env.example
+backend/.env
+
+# Python caches and build output
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+.conda/
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local generated data
+backend/data/faiss_index/

@@ -1,0 +1,793 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>开始分析 - 法律护航卫士</title>
+  <style>
+    :root {
+      --bg:      oklch(99% 0.002 240);
+      --surface: oklch(100% 0 0);
+      --fg:      oklch(18% 0.012 250);
+      --muted:   oklch(54% 0.012 250);
+      --border:  oklch(92% 0.005 250);
+      --accent:  oklch(58% 0.18 255);
+
+      --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+      --font-body:    -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+      --green: oklch(43% 0.08 155);
+      --cream: oklch(97% 0.012 80);
+      --low: oklch(56% 0.07 235);
+      --medium: oklch(66% 0.14 78);
+      --high: oklch(60% 0.18 38);
+      --critical: oklch(43% 0.18 25);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--font-body);
+      color: var(--fg);
+      background: linear-gradient(180deg, oklch(99% 0.003 85), var(--bg) 320px);
+    }
+    button, textarea { font: inherit; }
+    a { color: inherit; text-decoration: none; }
+    .page { padding: 24px; }
+    .rhythm {
+      max-width: 1850px;
+      margin: 0 auto 22px;
+      border: 1px solid color-mix(in oklch, var(--border), oklch(82% 0.05 80));
+      border-radius: 28px;
+      background: color-mix(in oklch, var(--cream), white 55%);
+      padding: 18px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      font-size: 16px;
+    }
+    .rhythm strong { font-weight: 800; }
+    .rhythm span:last-child { font-family: var(--font-mono); color: oklch(30% 0.04 145); }
+    .app {
+      max-width: 1850px;
+      min-height: calc(100vh - 120px);
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 288px minmax(0, 1fr);
+      border: 1px solid var(--border);
+      border-radius: 30px;
+      background: var(--surface);
+      overflow: hidden;
+      box-shadow: 0 18px 60px rgba(20, 29, 45, 0.08);
+    }
+    .side {
+      padding: 16px;
+      border-right: 1px solid var(--border);
+      background: linear-gradient(180deg, var(--surface), oklch(98% 0.003 250));
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 10px 18px;
+      font-weight: 800;
+    }
+    .mark {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: color-mix(in oklch, var(--green), white 84%);
+      display: grid;
+      place-items: center;
+      color: var(--green);
+    }
+    .mark::after {
+      content: "";
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .mode-button {
+      width: 100%;
+      border: 1px solid transparent;
+      border-radius: 18px;
+      background: transparent;
+      text-align: left;
+      padding: 18px 16px;
+      cursor: pointer;
+      color: var(--muted);
+      display: grid;
+      gap: 6px;
+      transition: background .18s ease, border-color .18s ease, color .18s ease;
+    }
+    .mode-button strong { color: var(--fg); font-size: 18px; }
+    .mode-button.active {
+      background: oklch(17% 0.012 250);
+      color: oklch(87% 0.006 250);
+      border-color: oklch(17% 0.012 250);
+    }
+    .mode-button.active strong { color: white; }
+    .mode-button[data-mode="debate"] {
+      position: relative;
+      overflow: hidden;
+      background: var(--surface);
+      border-color: var(--border);
+      color: var(--muted);
+    }
+    .mode-button[data-mode="debate"]::before {
+      content: "";
+      position: absolute;
+      inset-block: 0;
+      inset-inline-start: 0;
+      width: 5px;
+      background: transparent;
+    }
+    .mode-button[data-mode="debate"] strong {
+      color: oklch(18% 0.012 250);
+    }
+    .mode-button[data-mode="debate"].active {
+      background:
+        linear-gradient(90deg,
+          color-mix(in oklch, var(--critical), white 88%) 0%,
+          color-mix(in oklch, var(--surface), transparent 0%) 48%,
+          color-mix(in oklch, var(--accent), white 88%) 100%);
+      border-color: color-mix(in oklch, var(--critical), var(--accent) 36%);
+      color: oklch(24% 0.03 250);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.42), 0 14px 28px rgba(42, 60, 100, .12);
+    }
+    .mode-button[data-mode="debate"].active strong {
+      color: oklch(16% 0.012 250);
+    }
+    .side-list {
+      margin-top: 22px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      display: grid;
+      gap: 6px;
+    }
+    .side-link {
+      display: flex;
+      justify-content: space-between;
+      border-radius: 14px;
+      padding: 12px 14px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .side-link:hover { background: oklch(98% 0.004 250); color: var(--fg); }
+    .note {
+      margin-top: 22px;
+      padding: 16px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.65;
+    }
+    .main {
+      min-width: 0;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+    .topbar {
+      padding: 28px 28px 22px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      gap: 24px;
+    }
+    .topbar h1 {
+      margin: 0;
+      font-family: var(--font-display);
+      font-size: 34px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+    .topbar p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.6;
+    }
+    .status-pill {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      padding: 12px 16px;
+      border-radius: 999px;
+      color: var(--green);
+      background: color-mix(in oklch, var(--green), white 90%);
+      border: 1px solid color-mix(in oklch, var(--green), white 75%);
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+    .status-pill::before {
+      content: "";
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: .45; transform: scale(.86); }
+      50% { opacity: 1; transform: scale(1.1); }
+    }
+    .workspace {
+      padding: 24px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 430px;
+      gap: 24px;
+      align-items: start;
+    }
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      background: var(--surface);
+      overflow: hidden;
+    }
+    .mode-strip {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .mode-card {
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 20px;
+      background: var(--surface);
+      cursor: pointer;
+      display: grid;
+      gap: 14px;
+      transition: transform .18s ease, border-color .18s ease, background .18s ease;
+    }
+    .mode-card:hover { transform: translateY(-2px); }
+    .mode-card.active {
+      border-color: color-mix(in oklch, var(--accent), var(--border) 28%);
+      background: color-mix(in oklch, var(--accent), white 94%);
+    }
+    .mode-card[data-mode="debate"] {
+      position: relative;
+      overflow: hidden;
+      border-color: var(--border);
+      background: var(--surface);
+    }
+    .mode-card[data-mode="debate"]::after {
+      content: "红方质疑 × 蓝方抗辩";
+      position: absolute;
+      inset-block-start: 18px;
+      inset-inline-end: 18px;
+      border-radius: 999px;
+      padding: 7px 10px;
+      background: rgba(255,255,255,.72);
+      border: 1px solid rgba(255,255,255,.9);
+      color: oklch(29% 0.035 250);
+      font-family: var(--font-body);
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+    .mode-card[data-mode="debate"].active {
+      border-color: color-mix(in oklch, var(--critical), var(--accent) 34%);
+      background:
+        linear-gradient(90deg,
+          color-mix(in oklch, var(--critical), white 88%) 0%,
+          color-mix(in oklch, var(--surface), transparent 0%) 48%,
+          color-mix(in oklch, var(--accent), white 88%) 100%);
+      color: var(--fg);
+      box-shadow: 0 18px 36px rgba(42, 60, 100, .10);
+    }
+    .mode-card[data-mode="debate"].active p,
+    .mode-card[data-mode="debate"].active h2 {
+      color: var(--fg);
+    }
+    .mode-card[data-mode="debate"].active .chip {
+      border-color: color-mix(in oklch, var(--critical), var(--accent) 34%);
+      background: rgba(255,255,255,.58);
+      color: oklch(24% 0.03 250);
+    }
+    .mode-card[data-mode="debate"].active::after {
+      background: rgba(255,255,255,.82);
+      border-color: rgba(255,255,255,.94);
+      color: oklch(24% 0.03 250);
+    }
+    .mode-card h2 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+    .mode-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .mini-flow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .chip {
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: oklch(35% 0.02 250);
+      font-family: var(--font-body);
+      font-size: 13px;
+      font-weight: 400;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+    .input-card { min-height: 660px; display: grid; grid-template-rows: auto 1fr auto; }
+    .tabs {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+    }
+    .segmented {
+      display: inline-flex;
+      padding: 4px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: oklch(98% 0.003 250);
+    }
+    .segmented button {
+      border: 0;
+      background: transparent;
+      padding: 10px 16px;
+      border-radius: 10px;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .segmented button.active { background: var(--surface); color: var(--fg); box-shadow: 0 1px 2px rgba(20, 29, 45, .06); }
+    .upload {
+      border: 1px dashed color-mix(in oklch, var(--accent), var(--border));
+      background: oklch(99% 0.004 250);
+      border-radius: 14px;
+      padding: 12px 16px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    textarea {
+      width: 100%;
+      min-height: 100%;
+      border: 0;
+      resize: none;
+      padding: 28px;
+      outline: none;
+      color: var(--fg);
+      font-size: 19px;
+      line-height: 1.85;
+      background:
+        linear-gradient(var(--surface), var(--surface)) padding-box,
+        repeating-linear-gradient(to bottom, transparent 0 34px, oklch(94% 0.004 250) 35px 36px);
+    }
+    .input-footer {
+      padding: 16px 18px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      color: var(--muted);
+    }
+    .btn {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface);
+      color: var(--fg);
+      padding: 13px 18px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform .18s ease, border-color .18s ease, background .18s ease;
+    }
+    .btn:hover { transform: translateY(-1px); border-color: color-mix(in oklch, var(--accent), var(--border)); }
+    .btn.primary { background: oklch(17% 0.012 250); color: white; border-color: oklch(17% 0.012 250); }
+    .process-card { padding: 22px; }
+    .ring-row {
+      display: grid;
+      grid-template-columns: 100px 1fr;
+      gap: 18px;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+    .ring {
+      --p: 76%;
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: conic-gradient(var(--accent) var(--p), oklch(93% 0.005 250) 0);
+      position: relative;
+      font-weight: 900;
+      font-size: 22px;
+    }
+    .ring::before {
+      content: "";
+      position: absolute;
+      inset: 12px;
+      border-radius: 50%;
+      background: var(--surface);
+    }
+    .ring span { position: relative; }
+    .process-card h2 { margin: 0 0 8px; font-size: 22px; }
+    .process-card p { margin: 0; color: var(--muted); line-height: 1.55; }
+    .steps { display: grid; gap: 12px; margin-top: 18px; }
+    .step {
+      display: grid;
+      grid-template-columns: 36px 1fr auto;
+      gap: 12px;
+      align-items: start;
+      padding: 15px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      color: var(--muted);
+      background: var(--surface);
+    }
+    .step.done {
+      color: var(--fg);
+      border-color: color-mix(in oklch, var(--green), white 70%);
+      background: color-mix(in oklch, var(--green), white 93%);
+    }
+    .step.active {
+      color: var(--fg);
+      border-color: color-mix(in oklch, var(--accent), white 45%);
+      background: color-mix(in oklch, var(--accent), white 90%);
+    }
+    .step-num {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      font-weight: 900;
+      color: var(--fg);
+    }
+    .step strong { display: block; margin-bottom: 4px; }
+    .step small { font-family: var(--font-mono); }
+    .results {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+    .result-card {
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 20px;
+      background: var(--surface);
+      animation: rise .45s ease both;
+    }
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .risk-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .badge {
+      border-radius: 999px;
+      padding: 6px 10px;
+      font: 800 12px/1 var(--font-mono);
+      color: white;
+    }
+    .low { background: var(--low); }
+    .medium { background: var(--medium); color: oklch(22% 0.02 70); }
+    .high { background: var(--high); }
+    .critical { background: var(--critical); }
+    .quote {
+      margin: 0 0 12px;
+      color: oklch(36% 0.02 250);
+      line-height: 1.7;
+      padding: 13px 14px;
+      border-radius: 14px;
+      background: oklch(98% 0.003 250);
+    }
+    .result-card p { margin: 0; color: var(--muted); line-height: 1.65; }
+    .debate-panel {
+      display: none;
+      grid-column: 1 / -1;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    .debate-panel.active { display: grid; }
+    .debate-card {
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 18px;
+      background: var(--surface);
+    }
+    .debate-card h3 { margin: 0 0 10px; font-size: 18px; }
+    .debate-card p { margin: 0; color: var(--muted); line-height: 1.7; }
+    .message {
+      grid-column: 1 / -1;
+      border: 1px solid color-mix(in oklch, var(--green), white 72%);
+      border-radius: 22px;
+      background: color-mix(in oklch, var(--green), white 94%);
+      padding: 20px;
+    }
+    .message strong { display: block; margin-bottom: 10px; }
+    .bubble {
+      max-width: 720px;
+      border-radius: 18px 18px 18px 6px;
+      padding: 16px 18px;
+      background: var(--surface);
+      line-height: 1.75;
+      color: oklch(30% 0.018 250);
+    }
+    .disclaimer {
+      grid-column: 1 / -1;
+      padding: 18px 20px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      background: oklch(98% 0.003 250);
+      line-height: 1.65;
+      font-size: 14px;
+    }
+    @media (max-width: 1180px) {
+      .app { grid-template-columns: 1fr; }
+      .side { border-right: 0; border-bottom: 1px solid var(--border); }
+      .workspace { grid-template-columns: 1fr; }
+      .process-card { order: 3; }
+      .results, .debate-panel { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 680px) {
+      .page { padding: 12px; }
+      .rhythm, .topbar, .input-footer { flex-direction: column; align-items: stretch; }
+      .mode-strip { grid-template-columns: 1fr; }
+      .tabs { flex-direction: column; align-items: stretch; }
+      .segmented { overflow-x: auto; }
+      .workspace { padding: 14px; }
+      .topbar h1 { font-size: 28px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="rhythm">
+      <span><strong>产品节奏：</strong>快速分析负责“我有没有风险”；红蓝对抗负责“我怎么和对方谈”。</span>
+      <span>Think → Decide → Execute</span>
+    </div>
+
+    <main class="app">
+      <aside class="side" aria-label="分析导航">
+        <a class="brand" href="index.html"><span class="mark"></span><span>法律护航卫士</span></a>
+        <button class="mode-button active" data-mode="quick" id="quick">
+          <strong>快速分析</strong>
+          <span>30 秒风险初筛：有效性、条款抽取、风险判定、建议草稿。</span>
+        </button>
+        <button class="mode-button" data-mode="debate" id="debate">
+          <strong>红蓝对抗分析</strong>
+          <span>围绕争议条款推演双方立场，输出谈判策略和话术。</span>
+        </button>
+        <div class="side-list">
+          <a class="side-link" id="ocr" href="#ocr"><span>OCR识别</span><span>图片/扫描件</span></a>
+          <a class="side-link" href="#results"><span>风险结果</span><span>2 项示例</span></a>
+          <a class="side-link" href="#docs"><span>文书生成</span><span>4 类输出</span></a>
+          <a class="side-link" id="disclaimer" href="#legal"><span>免责声明</span><span>使用边界</span></a>
+        </div>
+        <div class="note">默认先做快速分析。只有当用户需要处理争议、反驳 HR 或房东说法时，再进入红蓝对抗。</div>
+      </aside>
+
+      <section class="main">
+        <header class="topbar">
+          <div>
+            <h1 id="screenTitle">快速分析工作台</h1>
+            <p id="screenDesc">先把合同有效性、关键条款和风险等级讲清楚，再决定是否进入红蓝对抗。</p>
+          </div>
+          <div class="status-pill" id="liveStatus">RiskChecker 正在判定</div>
+        </header>
+
+        <div class="workspace">
+          <section class="mode-strip" aria-label="模式选择">
+            <button class="mode-card active" data-mode="quick">
+              <h2>快速分析</h2>
+              <p>适合第一次看合同：先做风险初筛，告诉用户哪里不公平、依据是什么、建议怎么改。</p>
+              <div class="mini-flow">
+                <span class="chip">Guardrail</span><span class="chip">Extractor</span><span class="chip">RiskChecker</span><span class="chip">DraftGenerator</span>
+              </div>
+            </button>
+            <button class="mode-card" data-mode="debate">
+              <h2>红蓝对抗分析</h2>
+              <p>适合高争议条款：模拟对方解释，再由裁决官给出结论和可复制谈判话术。</p>
+              <div class="mini-flow">
+                <span class="chip">Challenger</span><span class="chip">Defender</span><span class="chip">Judge</span><span class="chip">Negotiation</span>
+              </div>
+            </button>
+          </section>
+
+          <section class="card input-card" aria-label="合同输入">
+            <div class="tabs">
+              <div class="segmented" role="tablist" aria-label="合同类型">
+                <button class="active" data-contract="labor">劳动合同</button>
+                <button data-contract="lease">租赁合同</button>
+                <button data-contract="auto">自动识别</button>
+              </div>
+              <button class="upload" type="button">上传图片 / 扫描件 OCR</button>
+            </div>
+            <textarea id="contractText" aria-label="合同文本">甲方与乙方约定试用期六个月。乙方在试用期内提前离职的，应向甲方支付培训违约金 8,000 元。甲方可根据业务需要延长试用期，并有权视经营情况调整乙方工作地点。甲方将在乙方转正后为其缴纳社会保险和住房公积金。</textarea>
+            <div class="input-footer">
+              <span id="detected">已识别：劳动合同 · 约 126 字 · 含试用期/违约金/社保风险</span>
+              <button class="btn primary" id="runAnalysis" type="button">重新分析</button>
+            </div>
+          </section>
+
+          <aside class="card process-card" aria-label="实时分析流程">
+            <div class="ring-row">
+              <div class="ring" id="ring"><span id="percent">76%</span></div>
+              <div>
+                <h2 id="processTitle">RiskChecker 风险判定</h2>
+                <p id="processCopy">正在把条款与试用期、违约金、社保、公积金等风险库匹配。</p>
+              </div>
+            </div>
+            <div class="steps" id="steps"></div>
+            <button class="btn" id="viewResult" type="button" style="width:100%;margin-top:18px;">查看风险结果</button>
+          </aside>
+
+          <section class="results" id="results" aria-label="风险结果">
+            <article class="result-card">
+              <div class="risk-head"><strong>试用期与培训违约金绑定</strong><span class="badge high">high</span></div>
+              <p class="quote">“试用期内提前离职，应支付培训违约金 8,000 元。”</p>
+              <p>如果没有专项培训协议、服务期约定和费用明细，直接要求应届生支付违约金的可执行性较弱。建议要求删除该条，或明确仅限真实专项培训成本。</p>
+            </article>
+            <article class="result-card">
+              <div class="risk-head"><strong>转正后才缴纳社保公积金</strong><span class="badge critical">critical</span></div>
+              <p class="quote">“甲方将在乙方转正后为其缴纳社会保险和住房公积金。”</p>
+              <p>用人单位通常应自用工之日起依法办理社会保险登记。建议要求改为“自入职当月起依法缴纳”，避免试用期权益空档。</p>
+            </article>
+          </section>
+
+          <section class="debate-panel" id="debatePanel" aria-label="红蓝对抗结果">
+            <article class="debate-card">
+              <h3>红方 Challenger</h3>
+              <p>该条款把试用期离职和违约金绑定，会让刚入职的应届生承担不对等成本；同时没有展示专项培训、服务期和费用构成。</p>
+            </article>
+            <article class="debate-card">
+              <h3>蓝方 Defender</h3>
+              <p>企业可能解释为“入职培训投入较高，需要防止员工短期流失”，并主张金额只是培训管理成本。</p>
+            </article>
+            <article class="debate-card">
+              <h3>裁决官 Judge</h3>
+              <p>若缺少专项培训协议和实际支出证明，该条款对劳动者明显不利。建议先温和要求删除或改写，不必直接激化争议。</p>
+            </article>
+            <div class="message">
+              <strong>可复制谈判话术</strong>
+              <div class="bubble">您好，我看了合同中关于试用期离职需支付 8,000 元培训违约金的条款。为了避免后续理解不一致，想确认这是否对应专项培训协议、服务期和费用明细。如果只是常规入职培训，能否将该条删除，或改为仅在双方另行签署专项培训协议时适用？</div>
+            </div>
+          </section>
+
+          <section class="disclaimer" id="legal">
+            本工具仅供教育和参考使用，用于帮助理解合同风险、整理沟通思路和准备材料，不能替代持证律师的法律咨询。涉及仲裁、诉讼、重大金额或紧急期限时，请及时咨询专业律师或当地法律援助机构。
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const modeMeta = {
+      quick: {
+        title: "快速分析工作台",
+        desc: "先把合同有效性、关键条款和风险等级讲清楚，再决定是否进入红蓝对抗。",
+        status: "RiskChecker 正在判定",
+        process: "RiskChecker 风险判定",
+        copy: "正在把条款与试用期、违约金、社保、公积金等风险库匹配。",
+        percent: "76%",
+        steps: [
+          ["Guardrail 合同有效性检查", "确认文本属于劳动或租赁合同。", "00:01", "done"],
+          ["Extractor 条款结构化提取", "抽取主体、期限、付款、解除和责任条款。", "00:03", "done"],
+          ["RiskChecker 风险判定", "结合场景风险库和法律依据输出等级。", "00:06", "active"],
+          ["DraftGenerator 文书生成", "生成修改建议、通知和谈判话术。", "—", ""]
+        ]
+      },
+      debate: {
+        title: "红蓝对抗分析",
+        desc: "围绕争议条款做 Challenger / Defender / Judge 推演，再生成谈判动作。",
+        status: "Judge 正在裁决",
+        process: "Judge 客观裁决",
+        copy: "正在比较用户不利点、对方可能解释和可执行谈判路径。",
+        percent: "68%",
+        steps: [
+          ["Challenger 指出不利条款", "从用户立场拆解风险和压力点。", "00:02", "done"],
+          ["Defender 模拟对方解释", "预判 HR 或房东可能使用的理由。", "00:04", "done"],
+          ["Judge 客观裁决", "给出争议强弱、证据需求和沟通边界。", "00:07", "active"],
+          ["Negotiation 行动话术", "生成不激化但有边界的微信草稿。", "—", ""]
+        ]
+      }
+    };
+
+    const examples = {
+      labor: {
+        text: "甲方与乙方约定试用期六个月。乙方在试用期内提前离职的，应向甲方支付培训违约金 8,000 元。甲方可根据业务需要延长试用期，并有权视经营情况调整乙方工作地点。甲方将在乙方转正后为其缴纳社会保险和住房公积金。",
+        detected: "已识别：劳动合同 · 约 126 字 · 含试用期/违约金/社保风险"
+      },
+      lease: {
+        text: "承租人提前退租的，出租人有权不退还押金。房屋内设施发生损坏均由承租人承担维修费用。出租人系二房东，但未提供原房东同意转租的书面材料。租期结束后，出租人可在 60 日内视情况退还押金。",
+        detected: "已识别：租赁合同 · 约 103 字 · 含押金/维修/转租授权风险"
+      },
+      auto: {
+        text: "请粘贴劳动合同或租赁合同全文。系统会先识别合同类型，再进入 Guardrail、Extractor、RiskChecker 和 DraftGenerator 流程。",
+        detected: "等待识别：粘贴合同后自动判断劳动 / 租赁场景"
+      }
+    };
+
+    const modeButtons = document.querySelectorAll("[data-mode]");
+    const stepsEl = document.getElementById("steps");
+    const titleEl = document.getElementById("screenTitle");
+    const descEl = document.getElementById("screenDesc");
+    const statusEl = document.getElementById("liveStatus");
+    const processTitle = document.getElementById("processTitle");
+    const processCopy = document.getElementById("processCopy");
+    const percent = document.getElementById("percent");
+    const ring = document.getElementById("ring");
+    const debatePanel = document.getElementById("debatePanel");
+
+    function renderSteps(items) {
+      stepsEl.innerHTML = items.map((step, index) => `
+        <div class="step ${step[3]}">
+          <span class="step-num">${index + 1}</span>
+          <span><strong>${step[0]}</strong>${step[1]}</span>
+          <small>${step[2]}</small>
+        </div>
+      `).join("");
+    }
+
+    function setMode(mode) {
+      const meta = modeMeta[mode];
+      titleEl.textContent = meta.title;
+      descEl.textContent = meta.desc;
+      statusEl.textContent = meta.status;
+      processTitle.textContent = meta.process;
+      processCopy.textContent = meta.copy;
+      percent.textContent = meta.percent;
+      ring.style.setProperty("--p", meta.percent);
+      renderSteps(meta.steps);
+      debatePanel.classList.toggle("active", mode === "debate");
+      modeButtons.forEach((button) => button.classList.toggle("active", button.dataset.mode === mode));
+      if (location.hash !== "#" + mode) history.replaceState(null, "", "#" + mode);
+    }
+
+    document.querySelectorAll("[data-contract]").forEach((button) => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll("[data-contract]").forEach((item) => item.classList.remove("active"));
+        button.classList.add("active");
+        const sample = examples[button.dataset.contract];
+        document.getElementById("contractText").value = sample.text;
+        document.getElementById("detected").textContent = sample.detected;
+      });
+    });
+
+    modeButtons.forEach((button) => button.addEventListener("click", () => setMode(button.dataset.mode)));
+    document.getElementById("viewResult").addEventListener("click", () => { location.hash = "#results"; });
+    document.getElementById("runAnalysis").addEventListener("click", () => {
+      const active = document.querySelector(".mode-button.active")?.dataset.mode || "quick";
+      setMode(active);
+      statusEl.textContent = active === "quick" ? "重新分析中" : "重新推演中";
+      setTimeout(() => { statusEl.textContent = modeMeta[active].status; }, 900);
+    });
+
+    setMode(location.hash === "#debate" ? "debate" : "quick");
+    window.addEventListener("hashchange", () => {
+      if (location.hash === "#debate") setMode("debate");
+      if (location.hash === "#quick") setMode("quick");
+    });
+  </script>
+</body>
+</html>
