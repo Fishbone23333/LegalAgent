@@ -349,6 +349,11 @@
       cursor: pointer;
     }
     .segmented button.active { background: var(--surface); color: var(--fg); box-shadow: 0 1px 2px rgba(20, 29, 45, .06); }
+    .auto-detect-note {
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 14px;
+    }
     .upload {
       border: 1px dashed color-mix(in oklch, var(--accent), var(--border));
       background: oklch(99% 0.004 250);
@@ -356,6 +361,31 @@
       padding: 12px 16px;
       color: var(--muted);
       font-weight: 700;
+    }
+    .ocr-progress {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      min-width: 220px;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .ocr-progress.active { display: flex; }
+    .ocr-progress-track {
+      width: 128px;
+      height: 8px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: oklch(93% 0.005 250);
+      border: 1px solid var(--border);
+    }
+    .ocr-progress-bar {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--green), var(--accent));
+      transition: width .2s ease;
     }
     textarea {
       width: 100%;
@@ -371,6 +401,9 @@
         linear-gradient(var(--surface), var(--surface)) padding-box,
         repeating-linear-gradient(to bottom, transparent 0 34px, oklch(94% 0.004 250) 35px 36px);
     }
+    textarea::placeholder {
+      color: color-mix(in oklch, var(--muted), white 35%);
+    }
     .input-footer {
       padding: 16px 18px;
       border-top: 1px solid var(--border);
@@ -379,6 +412,21 @@
       align-items: center;
       gap: 16px;
       color: var(--muted);
+    }
+    .inline-notice {
+      margin: 0 18px 16px;
+      min-height: 22px;
+      color: oklch(43% 0.12 42);
+      font-size: 14px;
+      font-weight: 700;
+      opacity: 0;
+      transform: translateY(-4px);
+      transition: opacity .28s ease, transform .28s ease;
+      pointer-events: none;
+    }
+    .inline-notice.active {
+      opacity: 1;
+      transform: translateY(0);
     }
     .btn {
       border: 1px solid var(--border);
@@ -502,6 +550,24 @@
     .result-card p { margin: 0; color: var(--muted); line-height: 1.65; }
     .result-card.full { grid-column: 1 / -1; }
     .result-card h3 { margin: 0 0 12px; font-size: 18px; }
+    .risk-box {
+      grid-column: 1 / -1;
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 22px;
+      background: var(--surface);
+      display: grid;
+      gap: 16px;
+    }
+    .risk-box h3 {
+      margin: 0;
+      font-size: 20px;
+    }
+    .risk-box-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
     .result-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
     .meta-chip {
       border-radius: 999px;
@@ -595,7 +661,7 @@
       .side { border-right: 0; border-bottom: 1px solid var(--border); }
       .workspace { grid-template-columns: 1fr; }
       .process-card { order: 3; }
-      .results, .debate-panel { grid-template-columns: 1fr; }
+      .results, .debate-panel, .risk-box-grid { grid-template-columns: 1fr; }
     }
     @media (max-width: 680px) {
       .page { padding: 12px; }
@@ -629,7 +695,7 @@
         <div class="side-list">
           <a class="side-link" id="ocr" href="#ocr"><span>OCR识别</span><span>图片/扫描件</span></a>
           <a class="side-link" href="#results"><span>风险结果</span><span>实时输出</span></a>
-          <a class="side-link" href="#results"><span>文书生成</span><span>建议/话术</span></a>
+          <a class="side-link" href="#results"><span>行动建议</span><span>优先级/风险</span></a>
           <a class="side-link" id="disclaimer" href="#legal"><span>免责声明</span><span>使用边界</span></a>
         </div>
         <div class="note">默认先做快速分析。只有当用户需要处理争议、反驳 HR 或房东说法时，再进入红蓝对抗。</div>
@@ -655,7 +721,7 @@
             </button>
             <button class="mode-card" data-mode="debate">
               <h2>红蓝对抗分析</h2>
-              <p>适合高争议条款：模拟对方解释，再由裁决官给出结论和可复制谈判话术。</p>
+              <p>适合高争议条款：模拟对方解释，再由裁决官给出修订方向和谈判话术。</p>
               <div class="mini-flow">
                 <span class="chip">Challenger</span><span class="chip">Defender</span><span class="chip">Judge</span><span class="chip">Negotiation</span>
               </div>
@@ -664,19 +730,20 @@
 
           <section class="card input-card" aria-label="合同输入">
             <div class="tabs">
-              <div class="segmented" role="tablist" aria-label="合同类型">
-                <button class="active" data-contract="labor">劳动合同</button>
-                <button data-contract="lease">租赁合同</button>
-                <button data-contract="auto">自动识别</button>
+              <div class="auto-detect-note">无需手动选择合同类型，系统会自动识别劳动合同或租赁合同。</div>
+              <div class="ocr-progress" id="ocrProgress" aria-hidden="true">
+                <div class="ocr-progress-track"><div class="ocr-progress-bar" id="ocrProgressBar"></div></div>
+                <span id="ocrProgressText">OCR 0%</span>
               </div>
               <button class="upload" id="uploadImage" type="button">上传图片 / 扫描件 OCR</button>
               <input id="imageInput" type="file" accept="image/*" hidden>
             </div>
-            <textarea id="contractText" aria-label="合同文本">甲方与乙方约定试用期六个月。乙方在试用期内提前离职的，应向甲方支付培训违约金 8,000 元。甲方可根据业务需要延长试用期，并有权视经营情况调整乙方工作地点。甲方将在乙方转正后为其缴纳社会保险和住房公积金。</textarea>
+            <textarea id="contractText" aria-label="合同文本" placeholder="在这里输入或粘贴合同内容。"></textarea>
             <div class="input-footer">
-              <span id="detected">已识别：劳动合同 · 约 126 字 · 含试用期/违约金/社保风险</span>
+              <span id="detected">等待输入：系统会自动识别合同类型并分析风险。</span>
               <button class="btn primary" id="runAnalysis" type="button">开始分析</button>
             </div>
+            <div class="inline-notice" id="analysisNotice" role="status" aria-live="polite"></div>
           </section>
 
           <aside class="card process-card" aria-label="实时分析流程">
@@ -691,36 +758,10 @@
             <button class="btn" id="viewResult" type="button" style="width:100%;margin-top:18px;">查看风险结果</button>
           </aside>
 
-          <section class="results" id="results" aria-label="风险结果">
-            <article class="result-card">
-              <div class="risk-head"><strong>试用期与培训违约金绑定</strong><span class="badge high">high</span></div>
-              <p class="quote">“试用期内提前离职，应支付培训违约金 8,000 元。”</p>
-              <p>如果没有专项培训协议、服务期约定和费用明细，直接要求应届生支付违约金的可执行性较弱。建议要求删除该条，或明确仅限真实专项培训成本。</p>
-            </article>
-            <article class="result-card">
-              <div class="risk-head"><strong>转正后才缴纳社保公积金</strong><span class="badge critical">critical</span></div>
-              <p class="quote">“甲方将在乙方转正后为其缴纳社会保险和住房公积金。”</p>
-              <p>用人单位通常应自用工之日起依法办理社会保险登记。建议要求改为“自入职当月起依法缴纳”，避免试用期权益空档。</p>
-            </article>
-          </section>
+          <section class="debate-panel" id="debatePanel" aria-label="红蓝对抗结果"></section>
 
-          <section class="debate-panel" id="debatePanel" aria-label="红蓝对抗结果">
-            <article class="debate-card">
-              <h3>红方 Challenger</h3>
-              <p>该条款把试用期离职和违约金绑定，会让刚入职的应届生承担不对等成本；同时没有展示专项培训、服务期和费用构成。</p>
-            </article>
-            <article class="debate-card">
-              <h3>蓝方 Defender</h3>
-              <p>企业可能解释为“入职培训投入较高，需要防止员工短期流失”，并主张金额只是培训管理成本。</p>
-            </article>
-            <article class="debate-card">
-              <h3>裁决官 Judge</h3>
-              <p>若缺少专项培训协议和实际支出证明，该条款对劳动者明显不利。建议先温和要求删除或改写，不必直接激化争议。</p>
-            </article>
-            <div class="message">
-              <strong>可复制谈判话术</strong>
-              <div class="bubble">您好，我看了合同中关于试用期离职需支付 8,000 元培训违约金的条款。为了避免后续理解不一致，想确认这是否对应专项培训协议、服务期和费用明细。如果只是常规入职培训，能否将该条删除，或改为仅在双方另行签署专项培训协议时适用？</div>
-            </div>
+          <section class="results" id="results" aria-label="风险结果">
+            <div class="empty-state">尚未开始分析。输入合同文本，或上传图片进行 OCR 识别，结果会在分析完成后显示。</div>
           </section>
 
           <section class="disclaimer" id="legal">
@@ -735,8 +776,11 @@
     const API_BASE = "http://localhost:8000";
     const state = {
       mode: "quick",
-      activeController: null,
+      activeController: { quick: null, debate: null, ocr: null },
       debateResult: null,
+      selectedOcrFile: null,
+      modeViews: {},
+      noticeTimer: null,
     };
 
     const modeMeta = {
@@ -746,13 +790,13 @@
         idleStatus: "等待合同输入",
         runningStatus: "快速分析中",
         process: "Guardrail 合同检查",
-        copy: "粘贴合同后，系统会依次完成有效性检查、条款抽取、风险判定和文书生成。",
+        copy: "粘贴合同后，系统会依次完成有效性检查、条款抽取、风险判定和行动建议整理。",
         endpoint: "/analyze/stream",
         steps: [
-          ["validating", "Guardrail 合同有效性检查", "确认文本属于劳动或租赁合同。"],
+          ["validating", "Guardrail 合同有效性检查", "确认合同类型"],
           ["extracting", "Extractor 条款结构化提取", "抽取主体、期限、付款、解除和责任条款。"],
           ["analyzing_risks", "RiskChecker 风险判定", "结合场景风险库和法律依据输出等级。"],
-          ["generating_documents", "DraftGenerator 文书生成", "生成修改建议、通知和谈判话术。"]
+          ["generating_documents", "ActionPlan 行动建议", "整理行动优先级和关键处理顺序。"]
         ]
       },
       debate: {
@@ -766,8 +810,8 @@
         steps: [
           ["challenger", "Challenger 指出不利条款", "从用户立场拆解风险和压力点。"],
           ["defender", "Defender 模拟对方解释", "预判 HR 或房东可能使用的理由。"],
-          ["judge", "Judge 客观裁决", "给出争议强弱、证据需求和沟通边界。"],
-          ["negotiation", "Negotiation 行动话术", "生成不激化但有边界的微信草稿。"]
+          ["judge", "Judge 裁决与修订方向", "给出条款效力、证据需求和修改重点。"],
+          ["negotiation", "Negotiation 谈判话术", "整理不激化但有边界的沟通话术。"]
         ]
       }
     };
@@ -801,6 +845,10 @@
     const runButton = document.getElementById("runAnalysis");
     const contractText = document.getElementById("contractText");
     const detected = document.getElementById("detected");
+    const analysisNotice = document.getElementById("analysisNotice");
+    const ocrProgress = document.getElementById("ocrProgress");
+    const ocrProgressBar = document.getElementById("ocrProgressBar");
+    const ocrProgressText = document.getElementById("ocrProgressText");
 
     function escapeHtml(value) {
       return String(value || "")
@@ -819,10 +867,143 @@
       return { critical: "critical", high: "high", medium: "medium", low: "low" }[level] || "low";
     }
 
+    function riskRank(level) {
+      return { critical: 4, high: 3, medium: 2, low: 1 }[riskName(level)] || 0;
+    }
+
     function setProgress(value) {
       const safe = Math.max(0, Math.min(100, Math.round(value)));
       percent.textContent = safe + "%";
       ring.style.setProperty("--p", safe + "%");
+    }
+
+    function getRunningAnalysisMode() {
+      return ["quick", "debate", "ocr"].find((mode) => {
+        const controller = state.activeController[mode];
+        return controller && !controller.signal.aborted;
+      }) || null;
+    }
+
+    function showAnalysisNotice(message) {
+      if (!analysisNotice) return;
+      analysisNotice.textContent = message;
+      analysisNotice.classList.add("active");
+      clearTimeout(state.noticeTimer);
+      state.noticeTimer = setTimeout(() => {
+        analysisNotice.classList.remove("active");
+      }, 3200);
+    }
+
+    function setOcrProgress(value, visible = true) {
+      const safe = Math.max(0, Math.min(100, Math.round(value)));
+      ocrProgress.classList.toggle("active", visible);
+      ocrProgress.setAttribute("aria-hidden", visible ? "false" : "true");
+      ocrProgressBar.style.width = safe + "%";
+      ocrProgressText.textContent = `OCR ${safe}%`;
+    }
+
+    function hideOcrProgress() {
+      setOcrProgress(0, false);
+    }
+
+    function createInitialModeView(mode) {
+      const meta = modeMeta[mode];
+      return {
+        title: meta.title,
+        desc: meta.desc,
+        status: meta.idleStatus,
+        processTitle: meta.process,
+        processCopy: meta.copy,
+        progress: 0,
+        stepsHtml: "",
+        resultsHtml: `<div class="empty-state">尚未开始分析。输入合同文本，或上传图片进行 OCR 识别，结果会在分析完成后显示。</div>`,
+        debateHtml: "",
+        detectedText: "等待输入：系统会自动识别合同类型并分析风险。",
+        contractText: "",
+        runButtonText: mode === "quick" ? "开始快速分析" : "启动红蓝对抗",
+        runButtonDisabled: false,
+        ocrVisible: false,
+        ocrProgress: 0,
+      };
+    }
+
+    function getModeView(mode = state.mode) {
+      if (!state.modeViews[mode]) state.modeViews[mode] = createInitialModeView(mode);
+      return state.modeViews[mode];
+    }
+
+    function captureCurrentModeView() {
+      const view = getModeView(state.mode);
+      view.title = titleEl.textContent;
+      view.desc = descEl.textContent;
+      view.status = statusEl.textContent;
+      view.processTitle = processTitle.textContent;
+      view.processCopy = processCopy.textContent;
+      view.progress = Number.parseInt(percent.textContent, 10) || 0;
+      view.stepsHtml = stepsEl.innerHTML;
+      view.resultsHtml = resultsEl.innerHTML;
+      view.debateHtml = debatePanel.innerHTML;
+      view.detectedText = detected.textContent;
+      view.contractText = contractText.value;
+      view.runButtonText = runButton.textContent;
+      view.runButtonDisabled = runButton.disabled;
+      view.ocrVisible = ocrProgress.classList.contains("active");
+      view.ocrProgress = Number.parseInt(ocrProgressText.textContent.replace(/\D/g, ""), 10) || 0;
+    }
+
+    function applyModeView(mode) {
+      const view = getModeView(mode);
+      titleEl.textContent = view.title;
+      descEl.textContent = view.desc;
+      statusEl.textContent = view.status;
+      processTitle.textContent = view.processTitle;
+      processCopy.textContent = view.processCopy;
+      setProgress(view.progress);
+      if (view.stepsHtml) stepsEl.innerHTML = view.stepsHtml;
+      else renderSteps(modeMeta[mode].steps);
+      resultsEl.innerHTML = view.resultsHtml;
+      debatePanel.innerHTML = view.debateHtml;
+      debatePanel.classList.toggle("active", mode === "debate" && Boolean(view.debateHtml));
+      detected.textContent = view.detectedText;
+      contractText.value = view.contractText;
+      runButton.textContent = view.runButtonText;
+      runButton.disabled = view.runButtonDisabled;
+      if (view.ocrVisible) setOcrProgress(view.ocrProgress);
+      else hideOcrProgress();
+    }
+
+    function updateCurrentViewPatch(mode, patch) {
+      Object.assign(getModeView(mode), patch);
+      if (state.mode === mode) applyModeView(mode);
+    }
+
+    function renderResultToModeView(mode, result) {
+      const rendered = mode === "debate" ? buildDebateResultView(result) : buildQuickResultView(result);
+      const view = getModeView(mode);
+      Object.assign(view, {
+        progress: 100,
+        status: "分析完成",
+        resultsHtml: rendered.resultsHtml,
+        debateHtml: rendered.debateHtml || "",
+        detectedText: rendered.detectedText,
+        runButtonDisabled: false,
+      });
+
+      if (state.mode !== mode) return;
+
+      setProgress(100);
+      statusEl.textContent = "分析完成";
+      resultsEl.innerHTML = rendered.resultsHtml;
+      debatePanel.innerHTML = rendered.debateHtml || "";
+      debatePanel.classList.toggle("active", mode === "debate" && Boolean(rendered.debateHtml));
+      detected.textContent = rendered.detectedText;
+      captureCurrentModeView();
+    }
+
+    function mutateModeView(mode, mutator) {
+      if (state.mode !== mode) return;
+      mutator();
+      captureCurrentModeView();
     }
 
     function renderSteps(items) {
@@ -845,18 +1026,24 @@
       if (message) processCopy.textContent = message;
     }
 
+    function completeSteps(stepIds) {
+      stepIds.forEach((stepId) => updateStep(stepId, "done"));
+    }
+
+    function scrollDebateStreamToLatest(log, shouldFollow = state.mode === "debate") {
+      if (!log || !shouldFollow) return;
+      const viewportBottomGap = document.documentElement.scrollHeight - window.scrollY - window.innerHeight;
+      const logBottomGap = log.scrollHeight - log.scrollTop - log.clientHeight;
+      if (viewportBottomGap > 180 || logBottomGap > 80) return;
+      log.scrollTop = log.scrollHeight;
+      window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "auto" });
+    }
+
     function setMode(mode) {
+      if (state.mode === mode && state.modeViews[mode]) return;
+      if (state.modeViews[state.mode]) captureCurrentModeView();
       state.mode = mode;
-      const meta = modeMeta[mode];
-      titleEl.textContent = meta.title;
-      descEl.textContent = meta.desc;
-      statusEl.textContent = meta.idleStatus;
-      processTitle.textContent = meta.process;
-      processCopy.textContent = meta.copy;
-      runButton.textContent = mode === "quick" ? "开始快速分析" : "启动红蓝对抗";
-      setProgress(0);
-      renderSteps(meta.steps);
-      debatePanel.classList.toggle("active", mode === "debate");
+      applyModeView(mode);
       modeButtons.forEach((button) => button.classList.toggle("active", button.dataset.mode === mode));
       if (["#quick", "#debate", "#ocr", ""].includes(location.hash) && location.hash !== "#" + mode) {
         history.replaceState(null, "", "#" + mode);
@@ -869,77 +1056,112 @@
       runButton.disabled = false;
     }
 
-    function renderQuickResult(result) {
-      const risks = result.risks || [];
-      const documents = result.final_documents || {};
+    function buildQuickResultView(result) {
+      const risks = [...(result.risks || [])].sort((a, b) => riskRank(b.risk_level) - riskRank(a.risk_level));
       const actions = result.action_plans || [];
+      let resultsHtml = "";
+
       if (!risks.length) {
-        resultsEl.innerHTML = `<div class="empty-state">未发现明显风险点。仍建议在签署前核对主体、期限、金额、解除条件和附件材料。</div>`;
+        resultsHtml = `<div class="empty-state">未发现明显风险点。仍建议在签署前核对主体、期限、金额、解除条件和附件材料。</div>`;
       } else {
-        resultsEl.innerHTML = risks.map((risk) => `
-          <article class="result-card">
-            <div class="risk-head">
-              <strong>${escapeHtml(risk.risk_type || "风险条款")}</strong>
-              <span class="badge ${riskName(risk.risk_level)}">${riskName(risk.risk_level)}</span>
+        resultsHtml = `
+          <section class="risk-box" aria-label="风险点汇总">
+            <h3>风险点汇总</h3>
+            <div class="risk-box-grid">
+              ${risks.map((risk) => `
+                <article class="result-card">
+                  <div class="risk-head">
+                    <strong>${escapeHtml(risk.risk_type || "风险条款")}</strong>
+                    <span class="badge ${riskName(risk.risk_level)}">${riskName(risk.risk_level)}</span>
+                  </div>
+                  <p class="quote">${escapeHtml(risk.clause || "")}</p>
+                  <div class="result-meta">
+                    <span class="meta-chip">${escapeHtml(risk.legal_basis || "待补充法律依据")}</span>
+                  </div>
+                  <p>${escapeHtml(risk.recommendation || risk.severity_note || "")}</p>
+                </article>
+              `).join("")}
             </div>
-            <p class="quote">${escapeHtml(risk.clause || "")}</p>
-            <div class="result-meta">
-              <span class="meta-chip">${escapeHtml(risk.legal_basis || "待补充法律依据")}</span>
-            </div>
-            <p>${escapeHtml(risk.recommendation || risk.severity_note || "")}</p>
-          </article>
-        `).join("");
+          </section>
+        `;
       }
 
-      const script = documents.negotiation_script || "";
-      const revisionSuggestions = documents.revision_suggestions || [];
-      const extra = [];
       if (actions.length) {
-        extra.push(`<article class="result-card full"><h3>行动优先级</h3><div class="action-list">${actions.map((item) => `<div class="action-item">${escapeHtml(item)}</div>`).join("")}</div></article>`);
+        resultsHtml += `<article class="result-card full"><h3>行动优先级</h3><div class="action-list">${actions.map((item) => `<div class="action-item">${escapeHtml(item)}</div>`).join("")}</div></article>`;
       }
-      if (script) {
-        extra.push(`<article class="result-card full"><h3>交涉话术</h3><div class="bubble">${escapeHtml(script)}</div></article>`);
-      }
-      if (revisionSuggestions.length) {
-        extra.push(`<article class="result-card full"><h3>合同修订建议</h3><div class="action-list">${revisionSuggestions.map((item) => `
-          <div class="action-item"><strong>原文：</strong>${escapeHtml(item.original_clause)}<br><strong>建议：</strong>${escapeHtml(item.suggested_revision)}<br><strong>理由：</strong>${escapeHtml(item.reason)}</div>
-        `).join("")}</div></article>`);
-      }
-      resultsEl.insertAdjacentHTML("beforeend", extra.join(""));
-      detected.textContent = `已完成：${contractName(result.contract_type)} · ${risks.length} 个风险点`;
+
+      return {
+        resultsHtml,
+        debateHtml: "",
+        detectedText: `已完成：${contractName(result.contract_type)} · ${risks.length} 个风险点`,
+      };
     }
 
+    function renderQuickResult(result) {
+      const rendered = buildQuickResultView(result);
+      resultsEl.innerHTML = rendered.resultsHtml;
+      debatePanel.innerHTML = "";
+      debatePanel.classList.remove("active");
+      detected.textContent = rendered.detectedText;
+    }
     function parseJsonObject(value) {
       if (!value) return {};
       if (typeof value === "object") return value;
       try { return JSON.parse(value); } catch { return {}; }
     }
 
-    function renderDebateResult(result) {
-      state.debateResult = result;
+    function buildDebateRevisionSuggestions(voidClauses, unfairClauses) {
+      return [
+        ...voidClauses.map((item) => ({
+          original_clause: item.clause || item.issue || "无效风险条款",
+          suggested_revision: item.action || item.revision || "建议删除该条款，或改为符合法律强制性规定的表述。",
+          reason: item.reason || item.legal_basis || "该条款可能违反强制性规定或明显加重用户责任。",
+        })),
+        ...unfairClauses.map((item) => ({
+          original_clause: item.clause || item.issue || "不利但可谈判条款",
+          suggested_revision: item.negotiation_point || item.action || "建议改为更清晰、对等、可执行的表述。",
+          reason: item.reason || item.legal_basis || "该条款未必当然无效，但对用户明显不利，建议签署前争取调整。",
+        })),
+      ].filter((item) => item.original_clause || item.suggested_revision || item.reason);
+    }
+
+    function buildDebateResultView(result) {
       const challenger = parseJsonObject(result.challenger_opening);
       const defender = parseJsonObject(result.defender_response);
       const judge = parseJsonObject(result.judge_verdict);
-      const actionGuide = result.final_action_guide || {};
       const scripts = result.negotiation_scripts || [];
 
-      const risks = challenger.risk_points || [];
-      resultsEl.innerHTML = risks.length ? risks.map((risk) => `
-        <article class="result-card">
-          <div class="risk-head">
-            <strong>${escapeHtml(risk.impact || "红方风险点")}</strong>
-            <span class="badge ${riskName(risk.risk_level)}">${riskName(risk.risk_level)}</span>
-          </div>
-          <p class="quote">${escapeHtml(risk.clause || "")}</p>
-          <p>${escapeHtml(risk.legal_basis || risk.severity_note || "")}</p>
-        </article>
-      `).join("") : `<div class="empty-state">红方未提出有效风险点。</div>`;
+      const risks = [...(challenger.risk_points || [])].sort((a, b) => riskRank(b.risk_level) - riskRank(a.risk_level));
+      let resultsHtml = "";
+      if (!risks.length) {
+        resultsHtml = `<div class="empty-state">红方未提出有效风险点。</div>`;
+      } else {
+        resultsHtml = `
+          <section class="risk-box" aria-label="风险点汇总">
+            <h3>风险点汇总</h3>
+            <div class="risk-box-grid">
+              ${risks.map((risk) => `
+                <article class="result-card">
+                  <div class="risk-head">
+                    <strong>${escapeHtml(risk.impact || risk.risk_type || "红方风险点")}</strong>
+                    <span class="badge ${riskName(risk.risk_level)}">${riskName(risk.risk_level)}</span>
+                  </div>
+                  <p class="quote">${escapeHtml(risk.clause || "")}</p>
+                  <div class="result-meta">
+                    <span class="meta-chip">${escapeHtml(risk.legal_basis || risk.severity_note || "待补充法律依据")}</span>
+                  </div>
+                </article>
+              `).join("")}
+            </div>
+          </section>
+        `;
+      }
 
       const responses = defender.responses || [];
       const voidClauses = judge.void_clauses || [];
       const unfairClauses = judge.unfair_but_legal || [];
-      const actionPlan = actionGuide.action_plan || {};
-      debatePanel.innerHTML = `
+      const revisionSuggestions = buildDebateRevisionSuggestions(voidClauses, unfairClauses);
+      const debateHtml = `
         <article class="debate-card">
           <h3>红方 Challenger</h3>
           <p>${escapeHtml(challenger.opening_statement || "红方分析已完成。")}</p>
@@ -950,25 +1172,37 @@
         </article>
         <article class="debate-card">
           <h3>裁决官 Judge</h3>
-          <p>${escapeHtml(judge.verdict_summary || "裁决官已生成行动指南。")}</p>
+          <p>${escapeHtml(judge.verdict_summary || "裁决官已生成修订方向。")}</p>
         </article>
-        <div class="message">
-          <strong>可复制谈判话术</strong>
-          ${scripts.length ? scripts.map((item) => `<div class="bubble">${escapeHtml(item.script || "")}</div>`).join("") : `<div class="bubble">暂未生成谈判话术。</div>`}
-        </div>
       `;
 
-      const actionItems = [
-        actionPlan.immediate_action,
-        actionPlan.negotiation_strategy,
-        actionPlan.if_refused,
-        ...(voidClauses.map((item) => `无效条款：${item.action || item.reason || item.clause}`)),
-        ...(unfairClauses.map((item) => `不利条款：${item.negotiation_point || item.reason || item.clause}`))
-      ].filter(Boolean);
-      if (actionItems.length) {
-        resultsEl.insertAdjacentHTML("beforeend", `<article class="result-card full"><h3>裁决行动指南</h3><div class="action-list">${actionItems.map((item) => `<div class="action-item">${escapeHtml(item)}</div>`).join("")}</div></article>`);
+      if (revisionSuggestions.length) {
+        resultsHtml += `<article class="result-card full"><h3>合同修订建议</h3><div class="action-list">${revisionSuggestions.map((item) => `
+          <div class="action-item"><strong>原文：</strong>${escapeHtml(item.original_clause)}<br><strong>建议：</strong>${escapeHtml(item.suggested_revision)}<br><strong>理由：</strong>${escapeHtml(item.reason)}</div>
+        `).join("")}</div></article>`;
       }
-      detected.textContent = `已完成：${contractName(result.contract_type)} · 红蓝对抗报告`;
+
+      resultsHtml += `
+        <article class="result-card full">
+          <h3>谈判话术</h3>
+          ${scripts.length ? scripts.map((item) => `<div class="bubble">${escapeHtml(item.script || "")}</div>`).join("") : `<div class="bubble">暂未生成谈判话术。</div>`}
+        </article>
+      `;
+
+      return {
+        resultsHtml,
+        debateHtml,
+        detectedText: `已完成：${contractName(result.contract_type)} · 红蓝对抗报告`,
+      };
+    }
+
+    function renderDebateResult(result) {
+      state.debateResult = result;
+      const rendered = buildDebateResultView(result);
+      resultsEl.innerHTML = rendered.resultsHtml;
+      debatePanel.innerHTML = rendered.debateHtml;
+      debatePanel.classList.toggle("active", state.mode === "debate" && Boolean(rendered.debateHtml));
+      detected.textContent = rendered.detectedText;
     }
 
     async function readNdjson(response, onEvent) {
@@ -995,152 +1229,255 @@
       }
     }
 
-    async function runQuickAnalysis(text) {
+    async function runQuickAnalysis(text, mode = "quick", controller = state.activeController.quick) {
       const response = await fetch(`${API_BASE}/analyze/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, user_id: "web-user" }),
-        signal: state.activeController.signal
+        signal: controller.signal
       });
       if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || "快速分析请求失败");
 
       await readNdjson(response, (event) => {
-        if (typeof event.progress === "number") setProgress(event.progress * 100);
-        if (event.step === "validating" || event.step === "validated") updateStep("validating", event.status === "done" || event.step === "validated" ? "done" : "running", event.message);
-        if (["extracting", "analyzing_risks", "generating_documents"].includes(event.step)) updateStep(event.step, event.status === "done" ? "done" : "running", event.message);
+        mutateModeView(mode, () => {
+          if (typeof event.progress === "number") setProgress(Math.min(event.progress * 100, 95));
+          if (event.step === "validating") updateStep("validating", event.status === "done" ? "done" : "running", event.message);
+          if (event.step === "validated") updateStep("validating", "done", event.message);
+          if (["extracting", "analyzing_risks", "generating_documents"].includes(event.step)) updateStep(event.step, event.status === "done" ? "done" : "running", event.message);
+        });
         if (event.step === "rejected" || event.status === "error") throw new Error(event.message || "合同验证未通过");
       });
+      mutateModeView(mode, () => completeSteps(modeMeta.quick.steps.map((step) => step[0])));
 
       const finalResponse = await fetch(`${API_BASE}/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, user_id: "web-user" }),
-        signal: state.activeController.signal
+        signal: controller.signal
       });
       if (!finalResponse.ok) throw new Error((await finalResponse.json().catch(() => ({}))).detail || "获取分析结果失败");
       return finalResponse.json();
     }
 
-    async function runDebateAnalysis(text) {
+    async function runDebateAnalysis(text, mode = "debate", controller = state.activeController.debate) {
       const partial = {};
       const response = await fetch(`${API_BASE}/debate/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, user_id: "web-user" }),
-        signal: state.activeController.signal
+        signal: controller.signal
       });
       if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || "红蓝对抗请求失败");
 
-      const streamLog = document.createElement("article");
-      streamLog.className = "result-card full";
-      streamLog.innerHTML = `<h3>实时生成</h3><div class="stream-log" id="streamLog"></div>`;
-      resultsEl.innerHTML = "";
-      resultsEl.appendChild(streamLog);
-      const log = document.getElementById("streamLog");
+      mutateModeView(mode, () => {
+        const streamLog = document.createElement("article");
+        streamLog.className = "result-card full";
+        streamLog.innerHTML = `<h3>实时生成</h3><div class="stream-log" id="streamLog"></div>`;
+        resultsEl.innerHTML = "";
+        resultsEl.appendChild(streamLog);
+      });
 
       await readNdjson(response, (event) => {
         if (event.type === "start") {
-          updateStep(event.agent, "running", event.content);
-          processTitle.textContent = modeMeta.debate.steps.find((step) => step[0] === event.agent)?.[1] || "红蓝对抗生成中";
+          mutateModeView(mode, () => {
+            updateStep(event.agent, "running", event.content);
+            processTitle.textContent = modeMeta.debate.steps.find((step) => step[0] === event.agent)?.[1] || "红蓝对抗生成中";
+          });
         }
-        if (event.type === "token") log.textContent += event.content || "";
+        if (event.type === "token") {
+          const shouldFollowStream = state.mode === mode;
+          mutateModeView(mode, () => {
+            const log = document.getElementById("streamLog");
+            if (log) {
+              log.textContent += event.content || "";
+              scrollDebateStreamToLatest(log, shouldFollowStream);
+            }
+          });
+        }
         if (event.type === "done") {
-          updateStep(event.agent, "done");
+          mutateModeView(mode, () => updateStep(event.agent, "done"));
           Object.assign(partial, event.data || {});
         }
         if (event.type === "complete") Object.assign(partial, event.data || {});
         if (event.type === "error") throw new Error(event.content || "红蓝对抗生成失败");
-        const doneCount = modeMeta.debate.steps.filter((step) => stepsEl.querySelector(`[data-step="${step[0]}"]`)?.classList.contains("done")).length;
-        setProgress((doneCount / modeMeta.debate.steps.length) * 100);
+        mutateModeView(mode, () => {
+          const doneCount = modeMeta.debate.steps.filter((step) => stepsEl.querySelector(`[data-step="${step[0]}"]`)?.classList.contains("done")).length;
+          setProgress((doneCount / modeMeta.debate.steps.length) * 100);
+        });
       });
       return partial;
     }
-
-    async function runOcrDebate(file) {
-      const partial = {};
+    async function runOcrRecognition(file) {
+      let recognizedText = "";
+      let recognizedType = "unknown";
       const response = await fetch(`${API_BASE}/ocr/stream`, {
         method: "POST",
         body: file,
-        signal: state.activeController.signal
+        signal: state.activeController.ocr.signal
       });
       if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || "OCR 请求失败");
-      resultsEl.innerHTML = `<article class="result-card full"><h3>OCR 与红蓝对抗实时生成</h3><div class="stream-log" id="streamLog"></div></article>`;
+      resultsEl.innerHTML = `<article class="result-card full"><h3>OCR 识别结果</h3><div class="stream-log" id="streamLog"></div></article>`;
       const log = document.getElementById("streamLog");
       await readNdjson(response, (event) => {
         if (event.step === "ocr" || event.step === "guardrail") {
           statusEl.textContent = event.message || "OCR 识别中";
-          setProgress((event.progress || 0.1) * 35);
+          const ocrPercent = (event.progress || 0.1) * 100;
+          setOcrProgress(ocrPercent);
+          setProgress(ocrPercent * 0.35);
+          if (event.full_text) {
+            recognizedText = event.full_text;
+            contractText.value = recognizedText;
+          }
+          if (event.contract_type) recognizedType = event.contract_type;
+          if (event.text_preview) log.textContent = event.text_preview;
         }
-        if (event.type === "start") updateStep(event.agent, "running", event.content);
-        if (event.type === "token") log.textContent += event.content || "";
-        if (event.type === "done") {
-          updateStep(event.agent, "done");
-          Object.assign(partial, event.data || {});
+        if (event.type === "result") {
+          setOcrProgress(100);
+          recognizedText = event.full_text || recognizedText;
+          recognizedType = event.contract_type || recognizedType;
+          contractText.value = recognizedText;
+          log.textContent = recognizedText;
         }
-        if (event.type === "complete") Object.assign(partial, event.data || {});
         if (event.type === "error" || event.status === "error") throw new Error(event.content || event.message || "OCR 识别失败");
       });
-      return partial;
+      if (!recognizedText || recognizedText.trim().length < 20) {
+        throw new Error("OCR 未识别到足够的合同内容，请换一张更清晰的图片或手动粘贴文本。");
+      }
+      contractText.value = recognizedText;
+      detected.textContent = `OCR 已填充：${contractName(recognizedType)} · ${recognizedText.trim().length} 字`;
+      return recognizedText;
     }
 
-    async function startAnalysis(file = null) {
-      if (state.activeController) state.activeController.abort();
-      state.activeController = new AbortController();
-      const text = contractText.value.trim();
-      if (!file && text.length < 20) {
-        showError("合同文本过短，请提供完整的合同内容（至少 20 字）。");
+    async function startOcrRecognition() {
+      if (state.activeController.ocr) state.activeController.ocr.abort();
+      state.activeController.ocr = new AbortController();
+      const file = state.selectedOcrFile;
+      if (!file) {
+        showError("请先上传图片或扫描件。");
         return;
       }
 
-      const meta = modeMeta[state.mode];
       runButton.disabled = true;
-      statusEl.textContent = file ? "OCR 识别中" : meta.runningStatus;
-      processTitle.textContent = meta.process;
-      processCopy.textContent = file ? "正在识别图片文字，识别完成后自动进入红蓝对抗。" : "正在连接后端服务并开始流式分析。";
+      statusEl.textContent = "OCR 识别中";
+      processTitle.textContent = "OCR 文字识别";
+      processCopy.textContent = "正在识别图片文字，识别完成后会自动填入输入框。";
       setProgress(3);
-      renderSteps(meta.steps);
-      resultsEl.innerHTML = `<div class="empty-state">分析正在进行，结果会在这里实时更新。</div>`;
+      setOcrProgress(1);
+      resultsEl.innerHTML = `<div class="empty-state">OCR 正在识别，识别出的文本会填入上方输入框。</div>`;
 
       try {
-        const result = file ? await runOcrDebate(file) : state.mode === "quick" ? await runQuickAnalysis(text) : await runDebateAnalysis(text);
-        setProgress(100);
-        statusEl.textContent = "分析完成";
-        if (file || state.mode === "debate") renderDebateResult(result);
-        else renderQuickResult(result);
+        await runOcrRecognition(file);
+        setProgress(0);
+        statusEl.textContent = "OCR 识别完成";
+        processCopy.textContent = "OCR 内容已填入输入框，请确认文本后点击分析按钮。";
+        resultsEl.innerHTML = `<div class="empty-state">OCR 识别完成。请检查输入框内容，然后点击${state.mode === "quick" ? "开始快速分析" : "启动红蓝对抗"}。</div>`;
+        state.selectedOcrFile = null;
+        document.getElementById("uploadImage").textContent = "上传图片 / 扫描件 OCR";
+        document.getElementById("imageInput").value = "";
       } catch (error) {
         if (error.name !== "AbortError") showError(error.message);
       } finally {
+        hideOcrProgress();
         runButton.disabled = false;
-        state.activeController = null;
+        if (!state.selectedOcrFile) document.getElementById("uploadImage").textContent = "上传图片 / 扫描件 OCR";
+        state.activeController.ocr = null;
       }
     }
 
-    document.querySelectorAll("[data-contract]").forEach((button) => {
-      button.addEventListener("click", () => {
-        document.querySelectorAll("[data-contract]").forEach((item) => item.classList.remove("active"));
-        button.classList.add("active");
-        const sample = examples[button.dataset.contract];
-        contractText.value = sample.text;
-        detected.textContent = sample.detected;
+    async function startAnalysis() {
+      const runningMode = getRunningAnalysisMode();
+      if (runningMode) {
+        const runningName = runningMode === "quick" ? "快速分析" : runningMode === "debate" ? "红蓝对抗分析" : "OCR 识别";
+        showAnalysisNotice(`正在进行${runningName}，请等待当前任务完成后再开始新的分析。`);
+        return;
+      }
+
+      captureCurrentModeView();
+      const mode = state.mode;
+      const text = contractText.value.trim();
+      if (text.length < 20) {
+        showError("合同文本过短，请提供完整的合同内容（至少 20 字）。");
+        captureCurrentModeView();
+        return;
+      }
+
+      if (state.activeController[mode]) state.activeController[mode].abort();
+      const controller = new AbortController();
+      state.activeController[mode] = controller;
+      const meta = modeMeta[mode];
+
+      updateCurrentViewPatch(mode, {
+        status: meta.runningStatus,
+        processTitle: meta.process,
+        processCopy: "正在连接后端服务并开始流式分析。",
+        progress: 3,
+        stepsHtml: modeMeta[mode].steps.map((step, index) => `
+        <div class="step" data-step="${step[0]}">
+          <span class="step-num">${index + 1}</span>
+          <span><strong>${step[1]}</strong>${step[2]}</span>
+          <small>等待</small>
+        </div>
+      `).join(""),
+        resultsHtml: `<div class="empty-state">分析正在进行，结果会在这里实时更新。</div>`,
+        debateHtml: "",
+        runButtonDisabled: false,
+        runButtonText: mode === "quick" ? "开始快速分析" : "启动红蓝对抗",
+        ocrVisible: false,
+        ocrProgress: 0,
+        contractText: text,
       });
-    });
+
+      try {
+        const result = mode === "quick"
+          ? await runQuickAnalysis(text, mode, controller)
+          : await runDebateAnalysis(text, mode, controller);
+
+        if (controller.signal.aborted) return;
+        renderResultToModeView(mode, result);
+      } catch (error) {
+        if (error.name !== "AbortError") {
+          if (state.mode === mode) {
+            showError(error.message);
+            captureCurrentModeView();
+          } else {
+            updateCurrentViewPatch(mode, {
+              resultsHtml: `<div class="error-state"><strong>处理失败</strong><br>${escapeHtml(error.message)}</div>`,
+              status: "分析失败",
+            });
+          }
+        }
+      } finally {
+        if (state.activeController[mode] === controller) state.activeController[mode] = null;
+        const view = getModeView(mode);
+        view.runButtonDisabled = false;
+        view.ocrVisible = false;
+        view.ocrProgress = 0;
+        const hasFinishedResult = view.progress >= 100 || view.resultsHtml.includes("risk-box") || view.resultsHtml.includes("风险点汇总");
+        const hasErrorResult = view.resultsHtml.includes("error-state");
+        if (!hasFinishedResult && !hasErrorResult) {
+          view.status = modeMeta[mode].idleStatus;
+        }
+        if (state.mode === mode) applyModeView(mode);
+      }
+    }
 
     modeButtons.forEach((button) => button.addEventListener("click", () => setMode(button.dataset.mode)));
     document.getElementById("viewResult").addEventListener("click", () => { location.hash = "#results"; });
     runButton.addEventListener("click", () => startAnalysis());
-    document.getElementById("uploadImage").addEventListener("click", () => document.getElementById("imageInput").click());
+    document.getElementById("uploadImage").addEventListener("click", () => {
+      document.getElementById("imageInput").click();
+    });
     document.getElementById("imageInput").addEventListener("change", (event) => {
       const file = event.target.files?.[0];
       if (!file) return;
-      setMode("debate");
-      detected.textContent = `已选择图片：${file.name}`;
-      startAnalysis(file);
+      state.selectedOcrFile = file;
+      detected.textContent = `已选择图片：${file.name}，正在 OCR 识别。`;
+      startOcrRecognition();
     });
 
     setMode(location.hash === "#debate" ? "debate" : "quick");
-    if (location.hash === "#ocr") setMode("debate");
     window.addEventListener("hashchange", () => {
-      if (location.hash === "#debate" || location.hash === "#ocr") setMode("debate");
+      if (location.hash === "#debate") setMode("debate");
       if (location.hash === "#quick") setMode("quick");
     });
 

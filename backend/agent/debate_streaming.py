@@ -187,7 +187,7 @@ async def run_streaming_debate(raw_contract: str, user_id: str = "anonymous"):
     #  Agent 4：Negotiation 谈判话术生成
     # ══════════════════════════════════════════════════════
     yield {"type": "start", "agent": "negotiation",
-           "content": "\n\n💬 正在根据风险点生成逐条谈判话术...\n\n"}
+           "content": "\n\n💬 正在根据风险点整理谈判话术...\n\n"}
 
     try:
         from langchain_core.messages import HumanMessage, SystemMessage
@@ -213,7 +213,7 @@ async def run_streaming_debate(raw_contract: str, user_id: str = "anonymous"):
             messages = [
                 SystemMessage(content=NEGOTIATION_PROMPT),
                 HumanMessage(
-                    content=f"合同类型：{contract_label}\n\n发现的风险点如下：\n\n{risk_summary}\n\n请为每个风险点生成一条谈判话术："
+                    content=f"合同类型：{contract_label}\n\n发现的风险点如下：\n\n{risk_summary}\n\n请整理每个风险点对应的谈判话术："
                 ),
             ]
 

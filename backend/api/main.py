@@ -63,7 +63,7 @@ async def stream_agent_updates(
         "status": "running",
         "message": "正在验证合同文本...",
         "progress": 0.1
-    }, ensure_ascii=False)
+    }, ensure_ascii=False) + "\n"
     await asyncio.sleep(0.3)
     
     is_contract, reason = guardrail_check(raw_contract)
@@ -75,7 +75,7 @@ async def stream_agent_updates(
             "status": "error",
             "message": f"文本验证未通过：{reason}",
             "progress": 1.0
-        }, ensure_ascii=False)
+        }, ensure_ascii=False) + "\n"
         return
     
     yield json.dumps({
@@ -84,7 +84,7 @@ async def stream_agent_updates(
         "status": "done",
         "message": "合同文本验证通过",
         "progress": 0.15
-    }, ensure_ascii=False)
+    }, ensure_ascii=False) + "\n"
     
     # 准备初始状态
     initial_state = {
@@ -107,7 +107,7 @@ async def stream_agent_updates(
         "status": "running",
         "message": "正在解析合同条款...",
         "progress": 0.2
-    }, ensure_ascii=False)
+    }, ensure_ascii=False) + "\n"
     
     # 使用graph.stream获取中间状态
     async for event in legal_agent_graph.astream(initial_state):
@@ -122,7 +122,7 @@ async def stream_agent_updates(
                 "message": f"条款解析完成，识别为{state.get('contract_type', 'unknown')}合同",
                 "progress": 0.4,
                 "contract_type": state.get("contract_type")
-            }, ensure_ascii=False)
+            }, ensure_ascii=False) + "\n"
             await asyncio.sleep(0.2)
         
         elif step_name == "risk_checker":
@@ -138,7 +138,7 @@ async def stream_agent_updates(
                     {"clause": r.get("clause", "")[:50], "risk_level": r.get("risk_level")}
                     for r in state.get("risks", [])[:3]
                 ]
-            }, ensure_ascii=False)
+            }, ensure_ascii=False) + "\n"
             await asyncio.sleep(0.2)
         
         elif step_name == "draft_generator":
@@ -146,9 +146,9 @@ async def stream_agent_updates(
                 "type": "step",
                 "step": "generating_documents",
                 "status": "done",
-                "message": "法律文书生成完成",
+                "message": "行动建议整理完成",
                 "progress": 0.9
-            }, ensure_ascii=False)
+            }, ensure_ascii=False) + "\n"
             await asyncio.sleep(0.2)
     
     # 最终结果
@@ -158,7 +158,7 @@ async def stream_agent_updates(
         "status": "done",
         "message": "分析完成",
         "progress": 1.0
-    }, ensure_ascii=False)
+    }, ensure_ascii=False) + "\n"
 
 
 @app.post("/analyze")
@@ -265,7 +265,7 @@ async def stream_debate_updates(
         "type": "step", "step": "validating",
         "status": "running", "message": "正在验证合同文本...",
         "progress": 0.05
-    }, ensure_ascii=False)
+    }, ensure_ascii=False) + "\n"
     await asyncio.sleep(0.3)
 
     is_contract, reason = guardrail_check(raw_contract)
@@ -274,14 +274,14 @@ async def stream_debate_updates(
             "type": "step", "step": "rejected",
             "status": "error", "message": f"文本验证未通过：{reason}",
             "progress": 1.0
-        }, ensure_ascii=False)
+        }, ensure_ascii=False) + "\n"
         return
 
     yield json.dumps({
         "type": "step", "step": "validated",
         "status": "done", "message": "合同文本验证通过，开始辩论...",
         "progress": 0.1
-    }, ensure_ascii=False)
+    }, ensure_ascii=False) + "\n"
 
     # 构建初始状态
     initial_state = {
@@ -303,7 +303,7 @@ async def stream_debate_updates(
         "type": "step", "step": "challenger",
         "status": "running", "message": "红方（应届生律师）正在挑刺...",
         "progress": 0.2
-    }, ensure_ascii=False)
+    }, ensure_ascii=False) + "\n"
 
     async for event in debate_graph.astream(initial_state):
         step_name = list(event.keys())[0] if event else "unknown"
@@ -315,7 +315,7 @@ async def stream_debate_updates(
                 "status": "done",
                 "message": "红方完成，开篇陈词已生成",
                 "progress": 0.4,
-            }, ensure_ascii=False)
+            }, ensure_ascii=False) + "\n"
             await asyncio.sleep(0.2)
 
         elif step_name == "defender":
@@ -334,25 +334,25 @@ async def stream_debate_updates(
                 "message": f"蓝方（企业法务）反驳完成，发现 {risk_count} 个风险点",
                 "progress": 0.65,
                 "challenger_snippet": opening_snippet,
-            }, ensure_ascii=False)
+            }, ensure_ascii=False) + "\n"
             await asyncio.sleep(0.2)
 
         elif step_name == "judge":
             yield json.dumps({
                 "type": "step", "step": "judge",
                 "status": "done",
-                "message": "裁决官完成，维权行动指南已生成",
+                "message": "裁决官完成，合同修订方向已生成",
                 "progress": 0.88
-            }, ensure_ascii=False)
+            }, ensure_ascii=False) + "\n"
             await asyncio.sleep(0.2)
 
         elif step_name == "negotiation":
             yield json.dumps({
                 "type": "step", "step": "negotiation",
                 "status": "done",
-                "message": "逐条谈判话术已生成",
+                "message": "谈判话术已整理完成",
                 "progress": 0.96
-            }, ensure_ascii=False)
+            }, ensure_ascii=False) + "\n"
             await asyncio.sleep(0.2)
 
     # 最终结果
@@ -362,7 +362,7 @@ async def stream_debate_updates(
         "status": "done",
         "message": "红蓝对抗辩论完成",
         "progress": 1.0
-    }, ensure_ascii=False)
+    }, ensure_ascii=False) + "\n"
 
 
 @app.post("/debate")
@@ -505,25 +505,10 @@ async def ocr_contract_image_stream(request: Request):
             raise HTTPException(status_code=400, detail="请上传图片文件")
 
         async def combined_stream():
-            ocr_complete = False
-            contract_text = ""
             async for ocr_event in stream_ocr(body):
                 yield json.dumps(ocr_event, ensure_ascii=False) + "\n"
                 if ocr_event.get("type") == "result":
-                    contract_text = ocr_event.get("full_text", "")
-                    ocr_complete = True
                     break
-                # guardrail done 阶段也包含完整文本
-                if ocr_event.get("step") == "guardrail" and ocr_event.get("status") == "done":
-                    contract_text = ocr_event.get("full_text", "")
-                    ocr_complete = True
-                    break
-
-            if ocr_complete and contract_text and len(contract_text) >= 20:
-                from agent.debate_streaming import run_streaming_debate
-                async for debate_event in run_streaming_debate(contract_text, "web-user-ocr"):
-                    yield json.dumps(debate_event, ensure_ascii=False) + "\n"
-
         return StreamingResponse(
             combined_stream(),
             media_type="application/x-ndjson",
