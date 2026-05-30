@@ -565,6 +565,9 @@
       align-items: center;
       gap: 8px;
       white-space: nowrap;
+      background: oklch(17% 0.012 250);
+      color: white;
+      border-color: oklch(17% 0.012 250);
     }
     .download-pdf::before {
       content: "↓";
@@ -1039,7 +1042,7 @@
     function resultToolbarHtml(mode) {
       return `
         <div class="result-toolbar">
-          <button class="btn download-pdf" type="button" data-download-pdf="${mode}">下载 PDF</button>
+          <button class="btn download-pdf" type="button" data-download-pdf="${mode}">下载结果报告PDF</button>
         </div>
       `;
     }
