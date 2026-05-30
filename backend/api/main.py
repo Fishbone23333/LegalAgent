@@ -15,7 +15,7 @@ from agent import run_analysis, legal_agent_graph, guardrail_check, run_debate, 
 from agent.debate_streaming import run_streaming_debate
 from agent.prompts import SYSTEM_PROMPT
 from agent.ocr import extract_contract_text_from_image, stream_ocr
-from pdf_generator import build_debate_pdf
+from pdf_generator import build_analysis_pdf, build_debate_pdf
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 FRONTEND_DIR = PROJECT_ROOT / "frontend"
@@ -40,6 +40,7 @@ def state_to_response(state) -> dict:
     """将AgentState转换为响应模型"""
     return {
         "success": state.get("is_valid_contract", False) and not state.get("error_message"),
+        "raw_contract": state.get("raw_contract", ""),
         "contract_type": state.get("contract_type", "unknown"),
         "is_valid_contract": state.get("is_valid_contract", False),
         "segments": state.get("segments", []),
@@ -237,6 +238,46 @@ async def analyze_contract_stream(request: dict):
         )
 
 
+@app.post("/analyze/export-pdf")
+async def export_analysis_pdf(request: dict):
+    """
+    导出快速分析报告为 PDF（下载）
+
+    将快速分析结果生成为格式化的 PDF 文件返回。
+    """
+    from datetime import datetime
+
+    try:
+        result = request.get("result")
+        if not result:
+            raise HTTPException(status_code=400, detail="缺少分析结果数据")
+
+        if request.get("text") and not result.get("raw_contract"):
+            result = {**result, "raw_contract": request.get("text")}
+
+        pdf_bytes = build_analysis_pdf(result)
+
+        contract_type = result.get("contract_type", "unknown")
+        type_map = {"employment": "劳动合同", "housing": "租赁合同", "unknown": "合同"}
+        label = type_map.get(contract_type, "合同")
+        now_str_ts = datetime.now().strftime("%Y%m%d%H%M")
+        filename = f"{label}快速分析报告_{now_str_ts}.pdf"
+        filename_encoded = quote(filename)
+
+        return StreamingResponse(
+            io.BytesIO(pdf_bytes),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename=\"{filename_encoded}\"; filename*=UTF-8''{filename_encoded}",
+                "Content-Length": str(len(pdf_bytes)),
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ═══════════════════════════════════════════════════════
 #  红蓝对抗辩论 API（Multi-Agent）
 # ═══════════════════════════════════════════════════════
@@ -245,6 +286,7 @@ def debate_state_to_response(state) -> dict:
     """将DebateState转换为响应模型"""
     return {
         "success": state.get("is_valid_contract", False) and not state.get("error_message"),
+        "raw_contract": state.get("raw_contract", ""),
         "contract_type": state.get("contract_type", "unknown"),
         "is_valid_contract": state.get("is_valid_contract", False),
         "challenger_opening": state.get("challenger_opening", ""),
@@ -444,13 +486,16 @@ async def export_debate_pdf(request: dict):
         if not result:
             raise HTTPException(status_code=400, detail="缺少辩论结果数据")
 
+        if request.get("text") and not result.get("raw_contract"):
+            result = {**result, "raw_contract": request.get("text")}
+
         pdf_bytes = build_debate_pdf(result)
 
         contract_type = result.get("contract_type", "unknown")
         type_map = {"employment": "劳动合同", "housing": "租赁合同", "unknown": "合同"}
         label = type_map.get(contract_type, "合同")
         now_str_ts = datetime.now().strftime("%Y%m%d%H%M")
-        filename = f"{label}修改意见书_{now_str_ts}.pdf"
+        filename = f"{label}红蓝对抗报告_{now_str_ts}.pdf"
         filename_encoded = quote(filename)
 
         return StreamingResponse(

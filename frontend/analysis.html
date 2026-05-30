@@ -22,6 +22,9 @@
       --medium: oklch(66% 0.14 78);
       --high: oklch(60% 0.18 38);
       --critical: oklch(43% 0.18 25);
+      --red-agent: oklch(52% 0.18 25);
+      --blue-agent: oklch(48% 0.16 255);
+      --judge-agent: oklch(63% 0.16 82);
     }
     * { box-sizing: border-box; }
     body {
@@ -550,6 +553,24 @@
     .result-card p { margin: 0; color: var(--muted); line-height: 1.65; }
     .result-card.full { grid-column: 1 / -1; }
     .result-card h3 { margin: 0 0 12px; font-size: 18px; }
+    .result-toolbar {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 10px;
+    }
+    .download-pdf {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+    .download-pdf::before {
+      content: "↓";
+      font-family: var(--font-mono);
+      font-weight: 900;
+    }
     .risk-box {
       grid-column: 1 / -1;
       border: 1px solid var(--border);
@@ -629,7 +650,17 @@
       background: var(--surface);
     }
     .debate-card h3 { margin: 0 0 10px; font-size: 18px; }
-    .debate-card p { margin: 0; color: var(--muted); line-height: 1.7; }
+    .debate-card[data-agent="challenger"] h3 { color: var(--red-agent); }
+    .debate-card[data-agent="defender"] h3 { color: var(--blue-agent); }
+    .debate-card[data-agent="judge"] h3 { color: var(--judge-agent); }
+    .debate-card p, .agent-stream { margin: 0; color: var(--muted); line-height: 1.7; }
+    .debate-card.streaming { height: 360px; display: flex; flex-direction: column; }
+    .debate-card.streaming .agent-stream { flex: 1; min-height: 0; overflow: auto; }
+    .agent-stream { white-space: pre-wrap; min-height: 160px; }
+    .reveal-item { opacity: 0; transform: translateY(12px); animation: resultReveal .48s ease forwards; animation-delay: var(--reveal-delay, 0ms); }
+    @keyframes resultReveal {
+      to { opacity: 1; transform: translateY(0); }
+    }
     .message {
       grid-column: 1 / -1;
       border: 1px solid color-mix(in oklch, var(--green), white 72%);
@@ -638,13 +669,33 @@
       padding: 20px;
     }
     .message strong { display: block; margin-bottom: 10px; }
-    .bubble {
-      max-width: 720px;
-      border-radius: 18px 18px 18px 6px;
+    .script-grid {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .script-card {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 16px;
       padding: 16px 18px;
-      background: var(--surface);
+      background: oklch(98% 0.003 250);
       line-height: 1.75;
       color: oklch(30% 0.018 250);
+      text-align: left;
+      overflow-wrap: anywhere;
+    }
+    .script-clause {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .script-card.empty {
+      width: 100%;
     }
     .disclaimer {
       grid-column: 1 / -1;
@@ -669,6 +720,8 @@
       .mode-strip { grid-template-columns: 1fr; }
       .tabs { flex-direction: column; align-items: stretch; }
       .segmented { overflow-x: auto; }
+      .result-toolbar { justify-content: stretch; }
+      .download-pdf { width: 100%; justify-content: center; }
       .workspace { padding: 14px; }
       .topbar h1 { font-size: 28px; }
     }
@@ -780,7 +833,10 @@
       debateResult: null,
       selectedOcrFile: null,
       modeViews: {},
+      results: { quick: null, debate: null },
       noticeTimer: null,
+      userScrolling: false,
+      scrollTimer: null,
     };
 
     const modeMeta = {
@@ -871,6 +927,14 @@
       return { critical: 4, high: 3, medium: 2, low: 1 }[riskName(level)] || 0;
     }
 
+    function resultToolbarHtml(mode) {
+      return `
+        <div class="result-toolbar">
+          <button class="btn download-pdf" type="button" data-download-pdf="${mode}">下载 PDF</button>
+        </div>
+      `;
+    }
+
     function setProgress(value) {
       const safe = Math.max(0, Math.min(100, Math.round(value)));
       percent.textContent = safe + "%";
@@ -924,6 +988,7 @@
         runButtonDisabled: false,
         ocrVisible: false,
         ocrProgress: 0,
+        result: null,
       };
     }
 
@@ -949,6 +1014,7 @@
       view.runButtonDisabled = runButton.disabled;
       view.ocrVisible = ocrProgress.classList.contains("active");
       view.ocrProgress = Number.parseInt(ocrProgressText.textContent.replace(/\D/g, ""), 10) || 0;
+      view.result = state.results[state.mode] || view.result || null;
     }
 
     function applyModeView(mode) {
@@ -964,6 +1030,7 @@
       resultsEl.innerHTML = view.resultsHtml;
       debatePanel.innerHTML = view.debateHtml;
       debatePanel.classList.toggle("active", mode === "debate" && Boolean(view.debateHtml));
+      state.results[mode] = view.result || state.results[mode] || null;
       detected.textContent = view.detectedText;
       contractText.value = view.contractText;
       runButton.textContent = view.runButtonText;
@@ -978,7 +1045,12 @@
     }
 
     function renderResultToModeView(mode, result) {
-      const rendered = mode === "debate" ? buildDebateResultView(result) : buildQuickResultView(result);
+      const enrichedResult = {
+        ...result,
+        raw_contract: result.raw_contract || getModeView(mode).contractText || contractText.value.trim(),
+      };
+      state.results[mode] = enrichedResult;
+      const rendered = mode === "debate" ? buildDebateResultView(enrichedResult) : buildQuickResultView(enrichedResult);
       const view = getModeView(mode);
       Object.assign(view, {
         progress: 100,
@@ -987,6 +1059,7 @@
         debateHtml: rendered.debateHtml || "",
         detectedText: rendered.detectedText,
         runButtonDisabled: false,
+        result: enrichedResult,
       });
 
       if (state.mode !== mode) return;
@@ -1030,13 +1103,38 @@
       stepIds.forEach((stepId) => updateStep(stepId, "done"));
     }
 
-    function scrollDebateStreamToLatest(log, shouldFollow = state.mode === "debate") {
-      if (!log || !shouldFollow) return;
-      const viewportBottomGap = document.documentElement.scrollHeight - window.scrollY - window.innerHeight;
-      const logBottomGap = log.scrollHeight - log.scrollTop - log.clientHeight;
-      if (viewportBottomGap > 180 || logBottomGap > 80) return;
-      log.scrollTop = log.scrollHeight;
-      window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "auto" });
+    function scrollDebateStreamToLatest(target, shouldFollow = state.mode === "debate") {
+      if (!target || !shouldFollow || state.userScrolling) return;
+      const gap = target.scrollHeight - target.scrollTop - target.clientHeight;
+      if (gap > 80) return;
+      target.scrollTop = target.scrollHeight;
+    }
+
+    function debateAgentTitle(agent) {
+      return {
+        challenger: "红方 Challenger",
+        defender: "蓝方 Defender",
+        judge: "裁决官 Judge",
+      }[agent] || agent;
+    }
+
+    function renderDebateStreamPanel() {
+      debatePanel.innerHTML = ["challenger", "defender", "judge"].map((agent) => `
+        <article class="debate-card streaming" data-agent="${agent}">
+          <h3>${debateAgentTitle(agent)}</h3>
+          <div class="agent-stream" id="${agent}Stream">等待生成...</div>
+        </article>
+      `).join("");
+      debatePanel.classList.add("active");
+    }
+
+    function appendDebateAgentToken(agent, content) {
+      if (!["challenger", "defender", "judge"].includes(agent)) return null;
+      const stream = document.getElementById(`${agent}Stream`);
+      if (!stream) return null;
+      if (stream.textContent === "等待生成...") stream.textContent = "";
+      stream.textContent += content || "";
+      return stream;
     }
 
     function setMode(mode) {
@@ -1056,15 +1154,26 @@
       runButton.disabled = false;
     }
 
+    function clearAnalysisDisplayForOcr(resultsHtml) {
+      debatePanel.innerHTML = "";
+      debatePanel.classList.remove("active");
+      resultsEl.innerHTML = resultsHtml;
+      const view = getModeView(state.mode);
+      view.debateHtml = "";
+      view.resultsHtml = resultsHtml;
+      view.result = null;
+      state.results[state.mode] = null;
+    }
+
     function buildQuickResultView(result) {
       const risks = [...(result.risks || [])].sort((a, b) => riskRank(b.risk_level) - riskRank(a.risk_level));
       const actions = result.action_plans || [];
-      let resultsHtml = "";
+      let resultsHtml = resultToolbarHtml("quick");
 
       if (!risks.length) {
-        resultsHtml = `<div class="empty-state">未发现明显风险点。仍建议在签署前核对主体、期限、金额、解除条件和附件材料。</div>`;
+        resultsHtml += `<div class="empty-state">未发现明显风险点。仍建议在签署前核对主体、期限、金额、解除条件和附件材料。</div>`;
       } else {
-        resultsHtml = `
+        resultsHtml += `
           <section class="risk-box" aria-label="风险点汇总">
             <h3>风险点汇总</h3>
             <div class="risk-box-grid">
@@ -1098,7 +1207,12 @@
     }
 
     function renderQuickResult(result) {
-      const rendered = buildQuickResultView(result);
+      const enrichedResult = {
+        ...result,
+        raw_contract: result.raw_contract || contractText.value.trim(),
+      };
+      state.results.quick = enrichedResult;
+      const rendered = buildQuickResultView(enrichedResult);
       resultsEl.innerHTML = rendered.resultsHtml;
       debatePanel.innerHTML = "";
       debatePanel.classList.remove("active");
@@ -1132,12 +1246,12 @@
       const scripts = result.negotiation_scripts || [];
 
       const risks = [...(challenger.risk_points || [])].sort((a, b) => riskRank(b.risk_level) - riskRank(a.risk_level));
-      let resultsHtml = "";
+      let resultsHtml = resultToolbarHtml("debate");
       if (!risks.length) {
-        resultsHtml = `<div class="empty-state">红方未提出有效风险点。</div>`;
+        resultsHtml += `<div class="empty-state">红方未提出有效风险点。</div>`;
       } else {
-        resultsHtml = `
-          <section class="risk-box" aria-label="风险点汇总">
+        resultsHtml += `
+          <section class="risk-box reveal-item" style="--reveal-delay: 1080ms" aria-label="风险点汇总">
             <h3>风险点汇总</h3>
             <div class="risk-box-grid">
               ${risks.map((risk) => `
@@ -1162,30 +1276,37 @@
       const unfairClauses = judge.unfair_but_legal || [];
       const revisionSuggestions = buildDebateRevisionSuggestions(voidClauses, unfairClauses);
       const debateHtml = `
-        <article class="debate-card">
+        <article class="debate-card reveal-item" data-agent="challenger" style="--reveal-delay: 0ms">
           <h3>红方 Challenger</h3>
           <p>${escapeHtml(challenger.opening_statement || "红方分析已完成。")}</p>
         </article>
-        <article class="debate-card">
+        <article class="debate-card reveal-item" data-agent="defender" style="--reveal-delay: 360ms">
           <h3>蓝方 Defender</h3>
           <p>${escapeHtml(defender.overall_stance || responses[0]?.justification || "蓝方反驳已完成。")}</p>
         </article>
-        <article class="debate-card">
+        <article class="debate-card reveal-item" data-agent="judge" style="--reveal-delay: 720ms">
           <h3>裁决官 Judge</h3>
           <p>${escapeHtml(judge.verdict_summary || "裁决官已生成修订方向。")}</p>
         </article>
       `;
 
       if (revisionSuggestions.length) {
-        resultsHtml += `<article class="result-card full"><h3>合同修订建议</h3><div class="action-list">${revisionSuggestions.map((item) => `
+        resultsHtml += `<article class="result-card full reveal-item" style="--reveal-delay: 1440ms"><h3>合同修订建议</h3><div class="action-list">${revisionSuggestions.map((item) => `
           <div class="action-item"><strong>原文：</strong>${escapeHtml(item.original_clause)}<br><strong>建议：</strong>${escapeHtml(item.suggested_revision)}<br><strong>理由：</strong>${escapeHtml(item.reason)}</div>
         `).join("")}</div></article>`;
       }
 
       resultsHtml += `
-        <article class="result-card full">
+        <article class="result-card full reveal-item" style="--reveal-delay: 1800ms">
           <h3>谈判话术</h3>
-          ${scripts.length ? scripts.map((item) => `<div class="bubble">${escapeHtml(item.script || "")}</div>`).join("") : `<div class="bubble">暂未生成谈判话术。</div>`}
+          <div class="script-grid">
+            ${scripts.length ? scripts.map((item) => `
+              <div class="script-card">
+                ${item.clause ? `<span class="script-clause">对应条款：${escapeHtml(item.clause)}</span>` : ""}
+                ${escapeHtml(item.script || "")}
+              </div>
+            `).join("") : `<div class="script-card empty">暂未生成谈判话术。</div>`}
+          </div>
         </article>
       `;
 
@@ -1197,12 +1318,59 @@
     }
 
     function renderDebateResult(result) {
-      state.debateResult = result;
-      const rendered = buildDebateResultView(result);
+      state.debateResult = {
+        ...result,
+        raw_contract: result.raw_contract || contractText.value.trim(),
+      };
+      state.results.debate = state.debateResult;
+      const rendered = buildDebateResultView(state.debateResult);
       resultsEl.innerHTML = rendered.resultsHtml;
       debatePanel.innerHTML = rendered.debateHtml;
       debatePanel.classList.toggle("active", state.mode === "debate" && Boolean(rendered.debateHtml));
       detected.textContent = rendered.detectedText;
+    }
+
+    function filenameFromDisposition(disposition) {
+      if (!disposition) return "";
+      const utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+      const rawName = utfMatch?.[1] || disposition.match(/filename="?([^";]+)"?/i)?.[1] || "";
+      if (!rawName) return "";
+      try { return decodeURIComponent(rawName); } catch { return rawName; }
+    }
+
+    async function downloadPdf(mode) {
+      const view = getModeView(mode);
+      const result = state.results[mode] || view.result;
+      if (!result) {
+        showAnalysisNotice("请先完成分析，再下载 PDF。");
+        return;
+      }
+
+      const endpoint = mode === "debate" ? "/debate/export-pdf" : "/analyze/export-pdf";
+      const response = await fetch(`${API_BASE}${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          result,
+          text: result.raw_contract || view.contractText || contractText.value.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.detail || "PDF 生成失败");
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filenameFromDisposition(response.headers.get("Content-Disposition"))
+        || `${contractName(result.contract_type)}${mode === "debate" ? "红蓝对抗报告" : "快速分析报告"}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
     async function readNdjson(response, onEvent) {
@@ -1270,11 +1438,8 @@
       if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || "红蓝对抗请求失败");
 
       mutateModeView(mode, () => {
-        const streamLog = document.createElement("article");
-        streamLog.className = "result-card full";
-        streamLog.innerHTML = `<h3>实时生成</h3><div class="stream-log" id="streamLog"></div>`;
-        resultsEl.innerHTML = "";
-        resultsEl.appendChild(streamLog);
+        resultsEl.innerHTML = `<div class="empty-state">红蓝对抗正在生成，三位 Agent 的实时内容会显示在上方卡片内。</div>`;
+        renderDebateStreamPanel();
       });
 
       await readNdjson(response, (event) => {
@@ -1287,11 +1452,8 @@
         if (event.type === "token") {
           const shouldFollowStream = state.mode === mode;
           mutateModeView(mode, () => {
-            const log = document.getElementById("streamLog");
-            if (log) {
-              log.textContent += event.content || "";
-              scrollDebateStreamToLatest(log, shouldFollowStream);
-            }
+            const stream = appendDebateAgentToken(event.agent, event.content);
+            if (stream) scrollDebateStreamToLatest(stream, shouldFollowStream);
           });
         }
         if (event.type === "done") {
@@ -1316,7 +1478,7 @@
         signal: state.activeController.ocr.signal
       });
       if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || "OCR 请求失败");
-      resultsEl.innerHTML = `<article class="result-card full"><h3>OCR 识别结果</h3><div class="stream-log" id="streamLog"></div></article>`;
+      clearAnalysisDisplayForOcr(`<article class="result-card full"><h3>OCR 识别结果</h3><div class="stream-log" id="streamLog"></div></article>`);
       const log = document.getElementById("streamLog");
       await readNdjson(response, (event) => {
         if (event.step === "ocr" || event.step === "guardrail") {
@@ -1363,14 +1525,14 @@
       processCopy.textContent = "正在识别图片文字，识别完成后会自动填入输入框。";
       setProgress(3);
       setOcrProgress(1);
-      resultsEl.innerHTML = `<div class="empty-state">OCR 正在识别，识别出的文本会填入上方输入框。</div>`;
+      clearAnalysisDisplayForOcr(`<div class="empty-state">OCR 正在识别，识别出的文本会填入上方输入框。</div>`);
 
       try {
         await runOcrRecognition(file);
         setProgress(0);
         statusEl.textContent = "OCR 识别完成";
         processCopy.textContent = "OCR 内容已填入输入框，请确认文本后点击分析按钮。";
-        resultsEl.innerHTML = `<div class="empty-state">OCR 识别完成。请检查输入框内容，然后点击${state.mode === "quick" ? "开始快速分析" : "启动红蓝对抗"}。</div>`;
+        clearAnalysisDisplayForOcr(`<div class="empty-state">OCR 识别完成。请检查输入框内容，然后点击${state.mode === "quick" ? "开始快速分析" : "启动红蓝对抗"}。</div>`);
         state.selectedOcrFile = null;
         document.getElementById("uploadImage").textContent = "上传图片 / 扫描件 OCR";
         document.getElementById("imageInput").value = "";
@@ -1404,6 +1566,7 @@
       if (state.activeController[mode]) state.activeController[mode].abort();
       const controller = new AbortController();
       state.activeController[mode] = controller;
+      state.results[mode] = null;
       const meta = modeMeta[mode];
 
       updateCurrentViewPatch(mode, {
@@ -1425,6 +1588,7 @@
         ocrVisible: false,
         ocrProgress: 0,
         contractText: text,
+        result: null,
       });
 
       try {
@@ -1464,6 +1628,21 @@
     modeButtons.forEach((button) => button.addEventListener("click", () => setMode(button.dataset.mode)));
     document.getElementById("viewResult").addEventListener("click", () => { location.hash = "#results"; });
     runButton.addEventListener("click", () => startAnalysis());
+    resultsEl.addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-download-pdf]");
+      if (!button) return;
+      button.disabled = true;
+      const originalText = button.textContent;
+      button.textContent = "生成中...";
+      try {
+        await downloadPdf(button.dataset.downloadPdf);
+      } catch (error) {
+        showAnalysisNotice(error.message || "PDF 下载失败，请稍后重试。");
+      } finally {
+        button.textContent = originalText;
+        button.disabled = false;
+      }
+    });
     document.getElementById("uploadImage").addEventListener("click", () => {
       document.getElementById("imageInput").click();
     });
@@ -1474,6 +1653,13 @@
       detected.textContent = `已选择图片：${file.name}，正在 OCR 识别。`;
       startOcrRecognition();
     });
+    window.addEventListener("scroll", () => {
+      state.userScrolling = true;
+      clearTimeout(state.scrollTimer);
+      state.scrollTimer = setTimeout(() => {
+        state.userScrolling = false;
+      }, 700);
+    }, { passive: true });
 
     setMode(location.hash === "#debate" ? "debate" : "quick");
     window.addEventListener("hashchange", () => {
