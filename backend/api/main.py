@@ -12,6 +12,7 @@ from urllib.parse import quote
 from typing import AsyncGenerator
 
 from agent import run_analysis, legal_agent_graph, guardrail_check, run_debate, debate_graph
+from agent.debate_chat import stream_debate_chat
 from agent.debate_streaming import run_streaming_debate
 from agent.prompts import SYSTEM_PROMPT
 from agent.ocr import extract_contract_text_from_image, stream_ocr
@@ -468,6 +469,36 @@ async def debate_contract_stream(request: dict):
         )
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/debate/chat/stream")
+async def debate_chat_stream(request: dict):
+    """
+    红蓝对抗完成后的单 Agent 追问流式聊天接口。
+
+    返回 NDJSON 流：token / done / error。
+    """
+    try:
+        agent = request.get("agent", "")
+        question = request.get("question", "")
+        context = request.get("context", {})
+        history = request.get("history", [])
+
+        async def ndjson_stream():
+            async for event in stream_debate_chat(agent, question, context, history):
+                yield json.dumps(event, ensure_ascii=False) + "\n"
+
+        return StreamingResponse(
+            ndjson_stream(),
+            media_type="application/x-ndjson",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            }
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

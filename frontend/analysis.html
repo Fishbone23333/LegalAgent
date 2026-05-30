@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>开始分析 - 法律护航卫士</title>
+  <title>开始分析 - 小白合同避坑助手</title>
   <style>
     :root {
       --bg:      oklch(99% 0.002 240);
@@ -636,6 +636,103 @@
       line-height: 1.75;
       white-space: pre-wrap;
     }
+    .agent-chat {
+      display: grid;
+      gap: 14px;
+    }
+    .agent-chat-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .agent-chat-tab {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--muted);
+      padding: 9px 13px;
+      cursor: pointer;
+      font-weight: 800;
+    }
+    .agent-chat-tab.active {
+      color: var(--fg);
+      border-color: color-mix(in oklch, var(--accent), white 45%);
+      background: color-mix(in oklch, var(--accent), white 90%);
+    }
+    .agent-chat-tab[data-chat-agent="challenger"].active {
+      border-color: color-mix(in oklch, var(--red-agent), white 45%);
+      background: color-mix(in oklch, var(--red-agent), white 88%);
+    }
+    .agent-chat-tab[data-chat-agent="defender"].active {
+      border-color: color-mix(in oklch, var(--blue-agent), white 45%);
+      background: color-mix(in oklch, var(--blue-agent), white 88%);
+    }
+    .agent-chat-tab[data-chat-agent="judge"].active {
+      border-color: color-mix(in oklch, var(--judge-agent), white 45%);
+      background: color-mix(in oklch, var(--judge-agent), white 88%);
+    }
+    .agent-chat-log {
+      min-height: 180px;
+      max-height: 420px;
+      overflow: auto;
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: oklch(99% 0.003 250);
+    }
+    .chat-message {
+      max-width: min(760px, 100%);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 12px 14px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .chat-message.user {
+      justify-self: end;
+      background: oklch(96% 0.025 250);
+      color: oklch(25% 0.025 250);
+    }
+    .chat-message.assistant {
+      justify-self: start;
+      background: var(--surface);
+      color: oklch(28% 0.018 250);
+    }
+    .chat-message.pending::after {
+      content: "▋";
+      display: inline-block;
+      margin-left: 2px;
+      color: var(--accent);
+      animation: blinkCaret .85s steps(1) infinite;
+    }
+    @keyframes blinkCaret {
+      50% { opacity: 0; }
+    }
+    .agent-chat-form {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: end;
+    }
+    .agent-chat-input {
+      min-height: 48px;
+      max-height: 140px;
+      resize: vertical;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 13px 14px;
+      background: var(--surface);
+      color: var(--fg);
+      outline: none;
+      line-height: 1.6;
+    }
+    .agent-chat-input:focus {
+      border-color: color-mix(in oklch, var(--accent), white 45%);
+      box-shadow: 0 0 0 4px color-mix(in oklch, var(--accent), white 88%);
+    }
     .debate-panel {
       display: none;
       grid-column: 1 / -1;
@@ -657,6 +754,12 @@
     .debate-card.streaming { height: 360px; display: flex; flex-direction: column; }
     .debate-card.streaming .agent-stream { flex: 1; min-height: 0; overflow: auto; }
     .agent-stream { white-space: pre-wrap; min-height: 160px; }
+    .debate-chat-card {
+      grid-column: 1 / -1;
+    }
+    .debate-chat-card .agent-chat-log {
+      max-height: 360px;
+    }
     .reveal-item { opacity: 0; transform: translateY(12px); animation: resultReveal .48s ease forwards; animation-delay: var(--reveal-delay, 0ms); }
     @keyframes resultReveal {
       to { opacity: 1; transform: translateY(0); }
@@ -736,7 +839,7 @@
 
     <main class="app">
       <aside class="side" aria-label="分析导航">
-        <a class="brand" href="index.html"><span class="mark"></span><span>法律护航卫士</span></a>
+        <a class="brand" href="index.html"><span class="mark"></span><span>小白合同避坑助手</span></a>
         <button class="mode-button active" data-mode="quick" id="quick">
           <strong>快速分析</strong>
           <span>30 秒风险初筛：有效性、条款抽取、风险判定、建议草稿。</span>
@@ -831,6 +934,12 @@
       mode: "quick",
       activeController: { quick: null, debate: null, ocr: null },
       debateResult: null,
+      debateChat: {
+        activeAgent: "challenger",
+        histories: { challenger: [], defender: [], judge: [] },
+        streaming: false,
+        controller: null,
+      },
       selectedOcrFile: null,
       modeViews: {},
       results: { quick: null, debate: null },
@@ -1045,6 +1154,7 @@
     }
 
     function renderResultToModeView(mode, result) {
+      if (mode === "debate") resetDebateChat();
       const enrichedResult = {
         ...result,
         raw_contract: result.raw_contract || getModeView(mode).contractText || contractText.value.trim(),
@@ -1239,6 +1349,136 @@
       ].filter((item) => item.original_clause || item.suggested_revision || item.reason);
     }
 
+    function resetDebateChat() {
+      if (state.debateChat.controller) state.debateChat.controller.abort();
+      state.debateChat = {
+        activeAgent: "challenger",
+        histories: { challenger: [], defender: [], judge: [] },
+        streaming: false,
+        controller: null,
+      };
+    }
+
+    function chatAgentLabel(agent) {
+      return {
+        challenger: "红方 Challenger",
+        defender: "蓝方 Defender",
+        judge: "裁决官 Judge",
+      }[agent] || agent;
+    }
+
+    function chatPlaceholder(agent) {
+      return {
+        challenger: "例如：我应该优先抓住哪一条和房东谈？",
+        defender: "例如：对方可能怎么解释这条押金约定？",
+        judge: "例如：如果只能改三处，你建议先改哪三处？",
+      }[agent] || "输入你想追问的问题。";
+    }
+
+    function buildDebateChatHtml() {
+      const active = state.debateChat.activeAgent;
+      const history = state.debateChat.histories[active] || [];
+      return `
+        <h3>继续追问</h3>
+        <div class="agent-chat" data-agent-chat>
+          <div class="agent-chat-tabs" role="tablist" aria-label="选择追问 Agent">
+            ${["challenger", "defender", "judge"].map((agent) => `
+              <button class="agent-chat-tab ${active === agent ? "active" : ""}" type="button" data-chat-agent="${agent}">
+                ${chatAgentLabel(agent)}
+              </button>
+            `).join("")}
+          </div>
+          <div class="agent-chat-log" id="agentChatLog" aria-live="polite">
+            ${history.length ? history.map((message, index) => `
+              <div class="chat-message ${message.role === "user" ? "user" : "assistant"} ${state.debateChat.streaming && index === history.length - 1 && message.role === "assistant" ? "pending" : ""}">${escapeHtml(message.content || "")}</div>
+            `).join("") : `<div class="empty-state">选择一个 Agent，围绕刚才的红蓝对抗结果继续追问。</div>`}
+          </div>
+          <form class="agent-chat-form" data-agent-chat-form>
+            <textarea class="agent-chat-input" name="question" rows="2" placeholder="${chatPlaceholder(active)}" ${state.debateChat.streaming ? "disabled" : ""}></textarea>
+            <button class="btn primary" type="submit" ${state.debateChat.streaming ? "disabled" : ""}>${state.debateChat.streaming ? "生成中..." : "发送"}</button>
+          </form>
+        </div>
+      `;
+    }
+
+    function renderDebateChatPanel() {
+      const host = document.getElementById("debateChatHost");
+      if (!host) return;
+      host.innerHTML = buildDebateChatHtml();
+      const log = document.getElementById("agentChatLog");
+      if (log) log.scrollTop = log.scrollHeight;
+    }
+
+    function buildDebateChatContext() {
+      const result = state.results.debate || state.debateResult || {};
+      return {
+        raw_contract: result.raw_contract || contractText.value.trim(),
+        contract_type: result.contract_type || "unknown",
+        challenger_opening: result.challenger_opening || "",
+        defender_response: result.defender_response || "",
+        judge_verdict: result.judge_verdict || "",
+        negotiation_scripts: result.negotiation_scripts || [],
+        final_action_guide: result.final_action_guide || {},
+      };
+    }
+
+    function setActiveChatAgent(agent) {
+      if (!["challenger", "defender", "judge"].includes(agent) || state.debateChat.streaming) return;
+      state.debateChat.activeAgent = agent;
+      renderDebateChatPanel();
+    }
+
+    async function sendAgentChatQuestion(question) {
+      const agent = state.debateChat.activeAgent;
+      const history = state.debateChat.histories[agent] || [];
+      const trimmed = question.trim();
+      if (!trimmed || state.debateChat.streaming) return;
+      if (!state.results.debate && !state.debateResult) {
+        showAnalysisNotice("请先完成红蓝对抗分析，再继续追问。");
+        return;
+      }
+
+      const priorHistory = history.slice();
+      history.push({ role: "user", content: trimmed });
+      history.push({ role: "assistant", content: "" });
+      state.debateChat.histories[agent] = history;
+      state.debateChat.streaming = true;
+      state.debateChat.controller = new AbortController();
+      renderDebateChatPanel();
+
+      try {
+        const response = await fetch(`${API_BASE}/debate/chat/stream`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            agent,
+            question: trimmed,
+            context: buildDebateChatContext(),
+            history: priorHistory,
+          }),
+          signal: state.debateChat.controller.signal,
+        });
+        if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || "追问请求失败");
+
+        const assistantMessage = history[history.length - 1];
+        await readNdjson(response, (event) => {
+          if (event.type === "token") {
+            assistantMessage.content += event.content || "";
+            renderDebateChatPanel();
+          }
+          if (event.type === "error") throw new Error(event.message || event.content || "追问生成失败");
+        });
+        if (!assistantMessage.content.trim()) assistantMessage.content = "没有生成有效回复，请稍后重试。";
+      } catch (error) {
+        history.pop();
+        showAnalysisNotice(error.message || "追问生成失败，请稍后重试。");
+      } finally {
+        state.debateChat.streaming = false;
+        state.debateChat.controller = null;
+        renderDebateChatPanel();
+      }
+    }
+
     function buildDebateResultView(result) {
       const challenger = parseJsonObject(result.challenger_opening);
       const defender = parseJsonObject(result.defender_response);
@@ -1288,6 +1528,7 @@
           <h3>裁决官 Judge</h3>
           <p>${escapeHtml(judge.verdict_summary || "裁决官已生成修订方向。")}</p>
         </article>
+        <article class="result-card debate-chat-card reveal-item" id="debateChatHost" style="--reveal-delay: 960ms">${buildDebateChatHtml()}</article>
       `;
 
       if (revisionSuggestions.length) {
@@ -1628,7 +1869,29 @@
     modeButtons.forEach((button) => button.addEventListener("click", () => setMode(button.dataset.mode)));
     document.getElementById("viewResult").addEventListener("click", () => { location.hash = "#results"; });
     runButton.addEventListener("click", () => startAnalysis());
+    function handleAgentChatClick(event) {
+      const chatTab = event.target.closest("[data-chat-agent]");
+      if (chatTab) {
+        setActiveChatAgent(chatTab.dataset.chatAgent);
+        return true;
+      }
+      return false;
+    }
+
+    async function handleAgentChatSubmit(event) {
+      const form = event.target.closest("[data-agent-chat-form]");
+      if (!form) return false;
+      event.preventDefault();
+      const input = form.elements.question;
+      const question = input.value;
+      input.value = "";
+      await sendAgentChatQuestion(question);
+      return true;
+    }
+
     resultsEl.addEventListener("click", async (event) => {
+      if (handleAgentChatClick(event)) return;
+
       const button = event.target.closest("[data-download-pdf]");
       if (!button) return;
       button.disabled = true;
@@ -1642,6 +1905,15 @@
         button.textContent = originalText;
         button.disabled = false;
       }
+    });
+    resultsEl.addEventListener("submit", async (event) => {
+      await handleAgentChatSubmit(event);
+    });
+    debatePanel.addEventListener("click", (event) => {
+      handleAgentChatClick(event);
+    });
+    debatePanel.addEventListener("submit", async (event) => {
+      await handleAgentChatSubmit(event);
     });
     document.getElementById("uploadImage").addEventListener("click", () => {
       document.getElementById("imageInput").click();
